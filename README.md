@@ -37,11 +37,13 @@ or a generated file. Neither the CLI nor the installer provisions a credential.
 
 ## Try the bundled executable
 
+Use an existing UTF-8 `message.txt` for the last command; third-party text belongs
+in a file or stdin, not inline shell arguments.
+
 ```bash
 skills/jev-skill/bin/jev --version
 skills/jev-skill/bin/jev models
-printf '%s\n' 'Stop sending promotional messages.' |
-  skills/jev-skill/bin/jev noul 'Does this request no more promotional contact?' -p
+skills/jev-skill/bin/jev noul 'Does this request no more promotional contact?' -p < message.txt
 ```
 
 The model default is `jev-latest`; pin a tested model ID when using calibrated
@@ -116,7 +118,7 @@ wc -l skills/jev-skill/SKILL.md
   environment/file credential lookup, authenticated header, seconds/date retry
   waits and their upper bound, recovery/exhaustion, redirects, sanitized 422
   details, actionable response validation, and output/argv credential checks.
-  Regression cases also cover HTTP rejection outside loopback, proxy bypass,
+  Regression cases also cover HTTP rejection outside literal loopback IPs, proxy bypass,
   UTF-8 under a different locale, BOM, closed stdout pipes, and defective JSON
   state. To challenge a historical executable, use `tools/check-cli.sh /path/to/jev`;
   the checker keeps its current expectations and reports regressions with exit 1.
@@ -135,10 +137,11 @@ wc -l skills/jev-skill/SKILL.md
   `evaluations/jev-skill/` for skill findability and decision behavior; provide
   queries without expected answers to the evaluator. Runtime tests, scenario
   fixtures, and actual agent discovery are separate evidence.
-  `evaluations/jev-skill/trigger-evals.json` contains positive English/Spanish
-  mentions and negative generation/math/date requests without a Jev mention.
-  Explicit mentions load the skill even for a poor fit; loading it can lead to
-  explaining the limitation and using code or a generative model instead.
+  `evaluations/jev-skill/trigger-evals.json` separates `should_trigger` (skill
+  loading) from `expect_cli_call` (CLI execution, checked in the tool trace).
+  Bounded judgments include concrete synthetic inputs. Mentions and quick phrases
+  can load the skill for non-judgment tasks; those tasks run directly and briefly,
+  without a Jev call, ⚖️ marker, skill mention, or tool-selection explanation.
 
 Run longer checks in the background through the directing agent's normal task
 runner. Record each command's exit and any failing condition. Do not reinterpret

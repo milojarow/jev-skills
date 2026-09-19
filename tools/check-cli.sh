@@ -205,7 +205,11 @@ def checkErrorStreams():
                 stdout, stderr = process.communicate()
                 failures.append(label + ": subprocess deadline exceeded")
             require(process.returncode == code, label + ": got " + str(process.returncode))
-            require(not stdout and not stderr, label + ": no stray output or traceback")
+            # Only inspect captured streams. A pipe with no reader cannot prove silence.
+            if stdout is not None:
+                require(stdout == b"", label + ": captured stdout is empty")
+            if stderr is not None:
+                require(stderr == b"", label + ": captured stderr has no stray output or traceback")
             require(len(state["requests"]) == count + int(direct and status is not None), label + ": expected request count")
             require(not state["responses"], label + ": error response consumed")
 
@@ -228,21 +232,21 @@ def checkRegressions(testHome, questions, server):
             require(len(proxy.proxyRequests) == 1 and proxy.proxyRequests[0][2].get("Authorization") == "Bearer " + fakeKey, "A1 proxy capture positive control")
 
             for index, host in enumerate(("fixture.invalid", "192.0.2.1", "localhost.fixture.invalid", "[::ffff:127.0.0.1]",
+                                          "localhost", "LOCALHOST", "localhost.", "LOCALHOST.",
                                           "localhost..", "0.0.0.0", "[::]", "[::1%25lo]", "127.0.0.1.", "127.000.0.1")):
                 auditPath = testHome / ("network-" + str(index))
-                run("A1 reject non-loopback HTTP", ["models"], 2, changes={**proxyEnv, "JEV_API_BASE": "http://" + host + ":" + str(server.server_port)}, networkLog=auditPath)
-                require(not auditPath.exists(), "A1 non-loopback HTTP performs no DNS or connection attempt: " + host)
+                run("A1 reject named or non-loopback HTTP: " + host, ["models"], 2, changes={**proxyEnv, "JEV_API_BASE": "http://" + host + ":" + str(server.server_port)}, networkLog=auditPath)
+                require(not auditPath.exists(), "A1 rejected HTTP performs no DNS or connection attempt: " + host)
 
             for index, host in enumerate(("127.2.3.4", "[::1]", "[0:0:0:0:0:0:0:1]")):
                 auditPath = testHome / ("allowed-loopback-" + str(index))
                 run("A1 accept loopback address", ["models"], 4, changes={"JEV_API_BASE": "http://" + host}, networkLog=auditPath)
                 require(auditPath.exists(), "A1 loopback address passes validation and reaches the network guard: " + host)
 
-            for host in ("127.0.0.1", "localhost", "localhost.", "LOCALHOST."):
-                directCount, proxyCount = len(state["requests"]), len(proxy.proxyRequests)
-                run("A1 loopback bypasses proxies: " + host, ["models"], changes={**proxyEnv, "JEV_API_BASE": "http://" + host + ":" + str(server.server_port)})
-                require(len(proxy.proxyRequests) == proxyCount, "A1 loopback never sends Authorization to a proxy: " + host)
-                require(len(state["requests"]) == directCount + 1, "A1 loopback reaches the origin directly: " + host)
+            directCount, proxyCount = len(state["requests"]), len(proxy.proxyRequests)
+            run("A1 literal loopback bypasses proxies", ["models"], changes=proxyEnv)
+            require(len(proxy.proxyRequests) == proxyCount, "A1 literal loopback never sends Authorization to a proxy")
+            require(len(state["requests"]) == directCount + 1, "A1 literal loopback reaches the origin directly")
 
             proxyCount = len(proxy.proxyRequests)
             run("A1 HTTPS retains proxy support", ["models"], 4, changes={**proxyEnv, "JEV_API_BASE": "https://fixture.invalid"})

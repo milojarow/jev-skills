@@ -28,6 +28,9 @@ an initial UTF-8 BOM is removed, and invalid UTF-8 exits with 2. This applies to
 both state and questions, regardless of locale or `PYTHONIOENCODING`. Other text,
 including line endings, is preserved. A terminal without piped input requires
 an explicit source.
+For third-party content, use `jev ... < message.txt` or `--state-file message.txt`.
+The text stays out of process arguments and shell interpolation. Inline `--state`
+is only for short text the agent wrote itself, never for third-party content.
 `--questions -` consumes stdin, so it requires `--state` or a named state file;
 two inputs cannot share an undelimited stream. `--state-text` forces the original
 text through unchanged. State source options are mutually exclusive.
@@ -86,20 +89,21 @@ Inherit it from the existing environment or let the CLI read its existing locati
 `JEV_API_BASE` defaults to `https://api.typesafe.ai`. The CLI appends `/v1/models`
 or `/v1/systemone`; do not include those paths in the base. An override selects
 where the authenticated request goes, so use a dummy key for local fake servers.
-For HTTP, the complete set of accepted host forms is:
+For HTTP, only literal loopback IP addresses are accepted:
 
 - IPv4 literals in `127.0.0.0/8`, in four-part decimal notation without leading
   zeros or a trailing dot (for example, `127.0.0.1` or `127.2.3.4`).
 - Bracketed IPv6 literals equal to `::1`, in any valid representation, without a
   zone identifier (for example, `[::1]` or `[0:0:0:0:0:0:0:1]`).
-- Exactly `localhost` or `localhost.`, case-insensitive: one optional final dot.
 
-Other hosts require HTTPS. Rejected HTTP forms include `localhost..`, scoped IPv6
-such as `[::1%25lo]`, unspecified addresses `0.0.0.0` and `[::]`, and IPv4-mapped
-IPv6 such as `[::ffff:127.0.0.1]`. They exit with 2 before any DNS lookup or
-connection attempt. Loopback destinations bypass all environment proxies,
-for both HTTP and HTTPS. Non-loopback HTTPS can use environment proxies; the
-API authorization header remains inside TLS. HTTP redirects are rejected.
+Every hostname requires HTTPS, including `localhost`, `localhost.`, and their
+case variants; their eventual DNS/NSS resolution does not grant an HTTP exception.
+Other rejected HTTP forms include scoped IPv6 such as `[::1%25lo]`, unspecified
+addresses `0.0.0.0` and `[::]`, and IPv4-mapped IPv6 such as `[::ffff:127.0.0.1]`.
+They exit with 2 before any DNS lookup or connection attempt. Literal loopback IPs
+bypass all environment proxies, for both HTTP and HTTPS. Other HTTPS destinations
+can use environment proxies; the API authorization header remains inside TLS.
+HTTP redirects are rejected.
 
 Each attempt has a 30-second deadline, including connecting and reading the body.
 HTTP 429, all 5xx (including 529), and network failures retry up to **three total

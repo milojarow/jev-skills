@@ -224,8 +224,6 @@ def loadKey():
 
 
 def isLoopback(hostname):
-    if hostname in ("localhost", "localhost."):
-        return True
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
@@ -245,7 +243,7 @@ def apiBase():
     if not valid:
         fail(2, "JEV_API_BASE must be an HTTP(S) base URL without credentials, query, or fragment")
     if parts.scheme == "http" and not isLoopback(parts.hostname):
-        fail(2, "JEV_API_BASE requires HTTPS except for loopback (127.0.0.0/8, ::1, localhost, localhost.)")
+        fail(2, "JEV_API_BASE requires HTTPS except for literal loopback IPs (127.0.0.0/8, ::1)")
     return base
 
 
