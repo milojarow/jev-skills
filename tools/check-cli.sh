@@ -1,9 +1,10 @@
 #!/bin/sh
-# Offline behavioral checks; all HTTP traffic targets the local fake server.
+# Offline behavioral checks. Optional argument: a historical CLI to challenge.
 set -eu
 scriptDir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
-exec python3 - "$scriptDir/.." <<'PY'
+exec python3 - "$scriptDir/.." "$@" <<'PY'
 import email.utils
+import http.client
 import http.server
 import json
 import os
@@ -17,12 +18,26 @@ import time
 import uuid
 
 repo = Path(sys.argv[1]).resolve()
-cli = str(repo / "skills/jev-skill/bin/jev")
+if len(sys.argv) > 3:
+    sys.exit("usage: check-cli.sh [CLI]")
+cli = str(Path(sys.argv[2]).resolve() if len(sys.argv) == 3 else repo / "skills/jev-skill/bin/jev")
 fakeKey = "fixture-" + uuid.uuid4().hex
 otherKey = "fallback-" + uuid.uuid4().hex
 state = {"requests": [], "responses": [], "key": fakeKey, "process": None, "argvSeen": False}
 failures = []
 checks = 0
+networkGuard = """
+import runpy, sys
+cli, auditPath = sys.argv[1:3]
+sys.argv = [cli] + sys.argv[3:]
+def rejectNetwork(event, args):
+    if event in ('socket.getaddrinfo', 'socket.connect', 'socket.sendto'):
+        with open(auditPath, 'a') as audit:
+            audit.write(event + '\\n')
+        raise OSError('Network attempt blocked by offline test')
+sys.addaudithook(rejectNetwork)
+runpy.run_path(cli, run_name='__main__')
+"""
 
 
 def require(condition, label):
@@ -51,6 +66,14 @@ def checkArgv(process):
 
 def handleRequest(handler):
     try:
+        if getattr(handler.server, "proxyRequests", None) is not None:
+            handler.server.proxyRequests.append((handler.command, handler.path, dict(handler.headers)))
+            raw = b'{"models":[]}'
+            handler.send_response(502 if handler.command == "CONNECT" else 200)
+            handler.send_header("Content-Length", str(len(raw)))
+            handler.end_headers()
+            handler.wfile.write(raw)
+            return
         length = int(handler.headers.get("Content-Length", "0"))
         body = json.loads(handler.rfile.read(length)) if length else None
         state["requests"].append((handler.path, body, time.monotonic(), dict(handler.headers)))
@@ -96,27 +119,32 @@ def handleRequest(handler):
 
 http.server.BaseHTTPRequestHandler.do_GET = handleRequest
 http.server.BaseHTTPRequestHandler.do_POST = handleRequest
+http.server.BaseHTTPRequestHandler.do_CONNECT = handleRequest
 http.server.BaseHTTPRequestHandler.log_message = lambda *args: None
 
 
-def run(label, args, expected=0, inputText=None, changes=None, watch=False, returnError=False, timeout=20):
+def run(label, args, expected=0, inputText=None, changes=None, watch=False, returnError=False, timeout=20, networkLog=None):
     state["process"] = None
     childEnv = env.copy()
     childEnv.update(changes or {})
     childEnv = {k: v for k, v in childEnv.items() if v is not None}
-    process = subprocess.Popen([cli] + args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=childEnv)
+    command = [cli] + args if networkLog is None else [sys.executable, "-c", networkGuard, cli, str(networkLog)] + args
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=childEnv)
+    inputBytes = inputText.encode("utf-8") if isinstance(inputText, str) else inputText
     if watch:
         # Input blocks the CLI until the parent has made its PID visible to the server.
         state["process"] = process
     try:
-        stdout, stderr = process.communicate(inputText, timeout=timeout)
+        stdout, stderr = process.communicate(inputBytes, timeout=timeout)
     except subprocess.TimeoutExpired:
         process.kill()
         stdout, stderr = process.communicate()
         failures.append(label + ": subprocess deadline exceeded")
     finally:
         state["process"] = None
-    require(process.returncode == expected, label + ": exit " + str(expected))
+    stdout = stdout.decode("utf-8", errors="replace")
+    stderr = stderr.decode("utf-8", errors="replace")
+    require(process.returncode == expected, label + ": expected exit " + str(expected) + ", got " + str(process.returncode))
     require(all(secret not in stdout + stderr for secret in (fakeKey, otherKey)), label + ": no credential in output")
     if expected:
         require(stdout == "", label + ": stdout is empty on error")
@@ -132,6 +160,110 @@ def decodeOutput(text):
     except ValueError:
         failures.append("success output must be valid JSON")
         return {}
+
+
+def checkRegressions(testHome, questions, server):
+    with http.server.HTTPServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler) as proxy:
+        proxy.proxyRequests = []
+        proxyThread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        proxyThread.start()
+        proxyUrl = "http://127.0.0.1:" + str(proxy.server_port)
+        proxyEnv = {name: proxyUrl for name in ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")}
+        proxyEnv.update({"no_proxy": "", "NO_PROXY": ""})
+        try:
+            # A known request proves that the proxy capture can see headers.
+            connection = http.client.HTTPConnection("127.0.0.1", proxy.server_port, timeout=5)
+            connection.request("GET", "http://fixture.invalid/v1/models", headers={"Authorization": "Bearer " + fakeKey})
+            connection.getresponse().read()
+            connection.close()
+            require(len(proxy.proxyRequests) == 1 and proxy.proxyRequests[0][2].get("Authorization") == "Bearer " + fakeKey, "A1 proxy capture positive control")
+
+            for index, host in enumerate(("fixture.invalid", "192.0.2.1", "localhost.fixture.invalid", "[::ffff:127.0.0.1]")):
+                auditPath = testHome / ("network-" + str(index))
+                run("A1 reject non-loopback HTTP", ["models"], 2, changes={**proxyEnv, "JEV_API_BASE": "http://" + host}, networkLog=auditPath)
+                require(not auditPath.exists(), "A1 non-loopback HTTP performs no DNS or connection attempt: " + host)
+
+            for index, host in enumerate(("127.2.3.4", "[::1]")):
+                auditPath = testHome / ("allowed-loopback-" + str(index))
+                run("A1 accept loopback address", ["models"], 4, changes={"JEV_API_BASE": "http://" + host}, networkLog=auditPath)
+                require(auditPath.exists(), "A1 loopback address passes validation and reaches the network guard: " + host)
+
+            for host in ("127.0.0.1", "localhost"):
+                directCount, proxyCount = len(state["requests"]), len(proxy.proxyRequests)
+                run("A1 loopback bypasses proxies", ["models"], changes={**proxyEnv, "JEV_API_BASE": "http://" + host + ":" + str(server.server_port)})
+                require(len(proxy.proxyRequests) == proxyCount, "A1 loopback never sends Authorization to a proxy: " + host)
+                require(len(state["requests"]) == directCount + 1, "A1 loopback reaches the origin directly: " + host)
+
+            proxyCount = len(proxy.proxyRequests)
+            run("A1 HTTPS retains proxy support", ["models"], 4, changes={**proxyEnv, "JEV_API_BASE": "https://fixture.invalid"})
+            tunnels = proxy.proxyRequests[proxyCount:]
+            require(len(tunnels) == 3 and all(method == "CONNECT" for method, _, _ in tunnels), "A1 HTTPS attempts a proxy tunnel")
+            require(all("Authorization" not in headers for _, _, headers in tunnels), "A1 CONNECT excludes API credentials")
+        finally:
+            proxy.shutdown()
+            proxyThread.join(timeout=5)
+            require(not proxyThread.is_alive(), "proxy fixture stopped")
+
+    message = "Ayúdame, por favor."
+    run("A2 UTF-8 stdin under Latin-1 locale", ["noul", "Help requested?"], inputText=message.encode("utf-8"), changes={"PYTHONIOENCODING": "latin-1"})
+    require(state["requests"][-1][1]["state"] == message, "A2 stdin preserves UTF-8 independently of locale")
+    accentedQuestions = {"present": {"type": "noul", "instructions": "¿El mensaje pide ayuda?"}}
+    run("A2 UTF-8 questions under Latin-1 locale", ["ask", "--questions", "-", "--state", "x"], inputText=json.dumps(accentedQuestions, ensure_ascii=False).encode("utf-8"), changes={"PYTHONIOENCODING": "latin-1"})
+    require(state["requests"][-1][1]["questions"] == accentedQuestions, "A2 questions preserve UTF-8 independently of locale")
+    badFile = testHome / "invalid-utf8"
+    badFile.write_bytes(b"bad:\xff")
+    for args, inputBytes in (
+        (["noul", "Question?"], b"bad:\xff"),
+        (["noul", "Question?", "--state-file", str(badFile)], None),
+        (["ask", "--questions", "-", "--state", "x"], b'{"q":"\xff"}'),
+        (["ask", "--questions", str(badFile), "--state", "x"], None),
+    ):
+        count = len(state["requests"])
+        run("A2 reject invalid UTF-8", args, 2, inputText=inputBytes, changes={"PYTHONIOENCODING": "latin-1"})
+        require(len(state["requests"]) == count, "A2 invalid UTF-8 never reaches API")
+
+    bom = b"\xef\xbb\xbf"
+    stateBytes = json.dumps({"message": message}, ensure_ascii=False).encode("utf-8")
+    bomState = testHome / "bom-state.json"
+    bomState.write_bytes(bom + stateBytes)
+    for args, inputBytes in ((["noul", "Question?", "--state-file", str(bomState)], None), (["noul", "Question?"], bom + stateBytes)):
+        run("A3 BOM state", args, inputText=inputBytes)
+        require(state["requests"][-1][1]["state"] == {"message": message}, "A3 BOM state stays a JSON object")
+    bomQuestions = testHome / "bom-questions.json"
+    bomQuestions.write_bytes(bom + json.dumps(questions).encode("utf-8"))
+    for source, inputBytes in ((str(bomQuestions), None), ("-", bomQuestions.read_bytes())):
+        count = len(state["requests"])
+        run("A3 BOM questions", ["ask", "--questions", source, "--state", "x"], inputText=inputBytes)
+        require(len(state["requests"]) == count + 1 and state["requests"][-1][1]["questions"] == questions, "A3 BOM questions reach API as a question map")
+
+    for size in (1, 128 * 1024):
+        state["responses"] = [{"status": 200, "json": {"models": [{"name": "x" * size}]}}]
+        count = len(state["requests"])
+        readFd, writeFd = os.pipe()
+        os.close(readFd)
+        try:
+            process = subprocess.Popen([cli, "models"], stdin=subprocess.DEVNULL, stdout=writeFd, stderr=subprocess.PIPE, env=env)
+        finally:
+            os.close(writeFd)
+        try:
+            _, stderr = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            _, stderr = process.communicate()
+            failures.append("A4 closed pipe subprocess deadline exceeded")
+        require(process.returncode == 0, "A4 closed pipe after success expected exit 0, got " + str(process.returncode) + " (bytes=" + str(size) + ")")
+        require(stderr == b"", "A4 closed pipe is silent, including interpreter shutdown")
+        require(len(state["requests"]) == count + 1, "A4 closed pipe does not repeat successful API call")
+
+    for malformed in ('{"user":"a","user":"b"}', '[{"x":1,"x":2}]', '{"x":NaN}', '[Infinity]', '{"x":-Infinity}', '{"x":1e400}'):
+        count = len(state["requests"])
+        stderr = run("A5 defective structured state", ["noul", "Question?", "--state", malformed], 2, returnError=True)
+        require(len(state["requests"]) == count, "A5 defective structured state never reaches API")
+        require("--state-text" in stderr, "A5 defective state explains the explicit text override")
+        run("A5 explicit state text", ["noul", "Question?", "--state", malformed, "--state-text"])
+        require(state["requests"][-1][1]["state"] == malformed, "A5 explicit override preserves the original text")
+    run("A5 non-JSON stays text", ["noul", "Question?", "--state", '{"unfinished":'])
+    require(state["requests"][-1][1]["state"] == '{"unfinished":', "A5 non-JSON still falls back to text")
 
 
 with tempfile.TemporaryDirectory(prefix="jev-cli-") as temp:
@@ -156,7 +288,9 @@ with tempfile.TemporaryDirectory(prefix="jev-cli-") as temp:
             config.parent.mkdir(parents=True)
             config.write_text("# Fixture only\nTYPESAFE_API_KEY='" + otherKey + "'\n")
 
-            require(run("version", ["--version"]).strip() == "jev 0.1.0", "CLI version")
+            expectedVersion = json.loads((repo / ".claude-plugin/plugin.json").read_text())["version"]
+            require(run("version", ["--version"]).strip() == "jev " + expectedVersion, "CLI version")
+            checkRegressions(testHome, questions, server)
             run("help", ["--help"])
             run("models", ["models"])
             full = decodeOutput(run("batch full", ["ask", "--questions", str(questionFile), "--state-file", str(stateFile), "--full", "--model", "fixture-pin"]))

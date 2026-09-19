@@ -5,6 +5,7 @@ import argparse
 import decimal
 import email.utils
 import http.client
+import ipaddress
 import json
 import math
 import os
@@ -16,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 DEFAULT_BASE = "https://api.typesafe.ai"
 ATTEMPTS = 3
 TIMEOUT = 30
@@ -92,6 +93,13 @@ def rejectConstant(value):
     raise ValueError("non-finite JSON")
 
 
+def finiteFloat(text):
+    value = float(text)
+    if not math.isfinite(value):
+        raise ValueError("non-finite JSON number")
+    return value
+
+
 def uniqueObject(pairs):
     result = {}
     for key, value in pairs:
@@ -102,7 +110,7 @@ def uniqueObject(pairs):
 
 
 def decodeJson(text):
-    return json.loads(text, parse_constant=rejectConstant, object_pairs_hook=uniqueObject)
+    return json.loads(text, parse_constant=rejectConstant, parse_float=finiteFloat, object_pairs_hook=uniqueObject)
 
 
 def readText(path):
@@ -110,8 +118,10 @@ def readText(path):
         if path == "-":
             if sys.stdin.isatty():
                 fail(2, "provide state or questions through a file, option, or pipe")
-            return sys.stdin.read()
-        return Path(path).read_text(encoding="utf-8")
+            raw = sys.stdin.buffer.read()
+        else:
+            raw = Path(path).read_bytes()
+        return raw.decode("utf-8-sig")
     except (OSError, UnicodeError, ValueError):
         fail(2, "cannot read UTF-8 input")
 
@@ -124,6 +134,12 @@ def readState(args):
     try:
         value = decodeJson(text)
     except (ValueError, RecursionError):
+        try:
+            permissive = json.loads(text)
+        except (ValueError, RecursionError):
+            return text
+        if isinstance(permissive, (dict, list)):
+            fail(2, "state JSON contains duplicate keys or non-finite numbers; use --state-text to send the original text explicitly")
         return text
     return value if isinstance(value, (dict, list)) else text
 
@@ -202,6 +218,16 @@ def loadKey():
     return apiKey
 
 
+def isLoopback(hostname):
+    if hostname == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+    return address.is_loopback if address.version == 4 else address == ipaddress.IPv6Address("::1")
+
+
 def apiBase():
     base = os.environ.get("JEV_API_BASE", DEFAULT_BASE).rstrip("/")
     try:
@@ -213,6 +239,8 @@ def apiBase():
         valid = False
     if not valid:
         fail(2, "JEV_API_BASE must be an HTTP(S) base URL without credentials, query, or fragment")
+    if parts.scheme == "http" and not isLoopback(parts.hostname):
+        fail(2, "JEV_API_BASE requires HTTPS except for loopback (127.0.0.0/8, ::1, localhost)")
     return base
 
 
@@ -252,7 +280,10 @@ def requestApi(base, apiKey, payload=None):
     redirectHandler = urllib.request.HTTPRedirectHandler()
     # Credentials must never follow a redirect to another endpoint.
     redirectHandler.redirect_request = lambda *args, **kwargs: None
-    opener = urllib.request.build_opener(redirectHandler)
+    handlers = [redirectHandler]
+    if isLoopback(urllib.parse.urlsplit(base).hostname):
+        handlers.append(urllib.request.ProxyHandler({}))
+    opener = urllib.request.build_opener(*handlers)
     for attempt in range(ATTEMPTS):
         retryAfter = None
         previousHandler = signal.signal(signal.SIGALRM, attemptTimeout)
@@ -348,7 +379,14 @@ def emit(value, apiKey, plain=False):
     try:
         output = str(value) if plain else json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
         keyText = apiKey if plain else json.dumps(apiKey, ensure_ascii=False)[1:-1]
-        print(output.replace(keyText, "[REDACTED]"))
+        print(output.replace(keyText, "[REDACTED]"), flush=True)
+    except BrokenPipeError:
+        # The API succeeded. Discard pending output, including the final flush.
+        nullFd = os.open(os.devnull, os.O_WRONLY)
+        try:
+            os.dup2(nullFd, sys.stdout.fileno())
+        finally:
+            os.close(nullFd)
     except (ValueError, UnicodeError):
         fail(4, "cannot encode API output")
 
