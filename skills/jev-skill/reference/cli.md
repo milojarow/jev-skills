@@ -86,9 +86,18 @@ Inherit it from the existing environment or let the CLI read its existing locati
 `JEV_API_BASE` defaults to `https://api.typesafe.ai`. The CLI appends `/v1/models`
 or `/v1/systemone`; do not include those paths in the base. An override selects
 where the authenticated request goes, so use a dummy key for local fake servers.
-HTTPS is required except for literal IPv4 loopback addresses in `127.0.0.0/8`,
-IPv6 `::1`, and `localhost`. Other HTTP hosts exit with 2 before any DNS lookup
-or connection attempt. Loopback destinations bypass all environment proxies,
+For HTTP, the complete set of accepted host forms is:
+
+- IPv4 literals in `127.0.0.0/8`, in four-part decimal notation without leading
+  zeros or a trailing dot (for example, `127.0.0.1` or `127.2.3.4`).
+- Bracketed IPv6 literals equal to `::1`, in any valid representation, without a
+  zone identifier (for example, `[::1]` or `[0:0:0:0:0:0:0:1]`).
+- Exactly `localhost` or `localhost.`, case-insensitive: one optional final dot.
+
+Other hosts require HTTPS. Rejected HTTP forms include `localhost..`, scoped IPv6
+such as `[::1%25lo]`, unspecified addresses `0.0.0.0` and `[::]`, and IPv4-mapped
+IPv6 such as `[::ffff:127.0.0.1]`. They exit with 2 before any DNS lookup or
+connection attempt. Loopback destinations bypass all environment proxies,
 for both HTTP and HTTPS. Non-loopback HTTPS can use environment proxies; the
 API authorization header remains inside TLS. HTTP redirects are rejected.
 
@@ -117,7 +126,10 @@ at the service even though their responses did not reach the CLI.
 | 4 | API/network/limit failure, invalid response, or interrupted operation | Inspect service availability and retry policy; retain work for retry/review. |
 | 5 | API validation error, HTTP 422 | Check the current API schema against the supplied state/questions. |
 
-Errors occupy one stderr line. HTTP 422 includes the API's validation detail
+Errors occupy one stderr line when the stream is writable. A closed pipe reader,
+invalid stderr descriptor, or closed stderr stream suppresses the diagnostic but
+preserves the selected error exit code, without a traceback or shutdown error.
+HTTP 422 includes the API's validation detail
 (JSON `detail`/`message`, or text), with the credential redacted, nonprintable
 characters removed or replaced, and whitespace normalized. The entire stderr
 line is capped at 500 characters before its terminating newline. Redaction

@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 DEFAULT_BASE = "https://api.typesafe.ai"
 ATTEMPTS = 3
 TIMEOUT = 30
@@ -26,7 +26,12 @@ MAX_RETRY_WAIT = 30
 
 def fail(code, message):
     # Dynamic diagnostics must be sanitized before reaching this function.
-    print("jev: " + message, file=sys.stderr)
+    try:
+        if sys.stderr is not None:
+            print("jev: " + message, file=sys.stderr, flush=True)
+    except (OSError, ValueError):
+        # Do not retry an unusable stream at shutdown: its flush could exit 120.
+        sys.stderr = None
     raise SystemExit(code)
 
 
@@ -219,7 +224,7 @@ def loadKey():
 
 
 def isLoopback(hostname):
-    if hostname == "localhost":
+    if hostname in ("localhost", "localhost."):
         return True
     try:
         address = ipaddress.ip_address(hostname)
@@ -240,7 +245,7 @@ def apiBase():
     if not valid:
         fail(2, "JEV_API_BASE must be an HTTP(S) base URL without credentials, query, or fragment")
     if parts.scheme == "http" and not isLoopback(parts.hostname):
-        fail(2, "JEV_API_BASE requires HTTPS except for loopback (127.0.0.0/8, ::1, localhost)")
+        fail(2, "JEV_API_BASE requires HTTPS except for loopback (127.0.0.0/8, ::1, localhost, localhost.)")
     return base
 
 
@@ -423,6 +428,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         fail(4, "interrupted")
     except BrokenPipeError:
+        # fail() absorbs stderr errors and raises SystemExit, bypassing this handler.
         sys.exit(4)
     except Exception:
         fail(4, "request failed; no diagnostic data emitted")

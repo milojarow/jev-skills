@@ -9,7 +9,7 @@
       "name": "jev-skills",
       "source": "./",
       "description": "Typed semantic decisions with Jev: a shared agent skill and standard-library CLI.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": {
         "name": "Jev Skills contributors"
       },

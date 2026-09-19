@@ -38,6 +38,22 @@ def rejectNetwork(event, args):
 sys.addaudithook(rejectNetwork)
 runpy.run_path(cli, run_name='__main__')
 """
+errorStreamGuard = """
+import os, runpy, sys
+cli, mode, code = sys.argv[1:]
+namespace = runpy.run_path(cli)
+if mode == 'buffered pipe':
+    sys.stderr.reconfigure(line_buffering=False, write_through=False)
+elif mode in ('bad descriptor', 'closed stream'):
+    sys.stderr = open(os.devnull, 'w')
+    if mode == 'bad descriptor':
+        os.close(sys.stderr.fileno())
+    else:
+        sys.stderr.close()
+elif mode == 'absent stream':
+    sys.stderr = None
+namespace['fail'](int(code), 'fixture diagnostic')
+"""
 
 
 def require(condition, label):
@@ -162,7 +178,40 @@ def decodeOutput(text):
         return {}
 
 
+def checkErrorStreams():
+    for mode in ("pipe", "merged pipe", "buffered pipe", "bad descriptor", "closed stream", "absent stream"):
+        for code, status, args in ((2, None, []), (3, 401, ["models"]), (5, 422, ["models"])):
+            label = "R5 stderr " + mode + " preserves exit " + str(code)
+            direct = mode in ("pipe", "merged pipe")
+            state["responses"] = [{"status": status, "json": {"detail": "Invalid fixture field"}}] if direct and status else []
+            count = len(state["requests"])
+            command = [cli] + args if direct else [sys.executable, "-c", errorStreamGuard, cli, mode, str(code)]
+            writeFd = None
+            if mode in ("pipe", "merged pipe", "buffered pipe"):
+                readFd, writeFd = os.pipe()
+                # Close before spawning: no race with a reader such as head -c 0.
+                os.close(readFd)
+            try:
+                process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                                           stdout=writeFd if mode == "merged pipe" else subprocess.PIPE,
+                                           stderr=writeFd if writeFd is not None else subprocess.PIPE, env=env)
+            finally:
+                if writeFd is not None:
+                    os.close(writeFd)
+            try:
+                stdout, stderr = process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+                failures.append(label + ": subprocess deadline exceeded")
+            require(process.returncode == code, label + ": got " + str(process.returncode))
+            require(not stdout and not stderr, label + ": no stray output or traceback")
+            require(len(state["requests"]) == count + int(direct and status is not None), label + ": expected request count")
+            require(not state["responses"], label + ": error response consumed")
+
+
 def checkRegressions(testHome, questions, server):
+    checkErrorStreams()
     with http.server.HTTPServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler) as proxy:
         proxy.proxyRequests = []
         proxyThread = threading.Thread(target=proxy.serve_forever, daemon=True)
@@ -178,27 +227,28 @@ def checkRegressions(testHome, questions, server):
             connection.close()
             require(len(proxy.proxyRequests) == 1 and proxy.proxyRequests[0][2].get("Authorization") == "Bearer " + fakeKey, "A1 proxy capture positive control")
 
-            for index, host in enumerate(("fixture.invalid", "192.0.2.1", "localhost.fixture.invalid", "[::ffff:127.0.0.1]")):
+            for index, host in enumerate(("fixture.invalid", "192.0.2.1", "localhost.fixture.invalid", "[::ffff:127.0.0.1]",
+                                          "localhost..", "0.0.0.0", "[::]", "[::1%25lo]", "127.0.0.1.", "127.000.0.1")):
                 auditPath = testHome / ("network-" + str(index))
-                run("A1 reject non-loopback HTTP", ["models"], 2, changes={**proxyEnv, "JEV_API_BASE": "http://" + host}, networkLog=auditPath)
+                run("A1 reject non-loopback HTTP", ["models"], 2, changes={**proxyEnv, "JEV_API_BASE": "http://" + host + ":" + str(server.server_port)}, networkLog=auditPath)
                 require(not auditPath.exists(), "A1 non-loopback HTTP performs no DNS or connection attempt: " + host)
 
-            for index, host in enumerate(("127.2.3.4", "[::1]")):
+            for index, host in enumerate(("127.2.3.4", "[::1]", "[0:0:0:0:0:0:0:1]")):
                 auditPath = testHome / ("allowed-loopback-" + str(index))
                 run("A1 accept loopback address", ["models"], 4, changes={"JEV_API_BASE": "http://" + host}, networkLog=auditPath)
                 require(auditPath.exists(), "A1 loopback address passes validation and reaches the network guard: " + host)
 
-            for host in ("127.0.0.1", "localhost"):
+            for host in ("127.0.0.1", "localhost", "localhost.", "LOCALHOST."):
                 directCount, proxyCount = len(state["requests"]), len(proxy.proxyRequests)
-                run("A1 loopback bypasses proxies", ["models"], changes={**proxyEnv, "JEV_API_BASE": "http://" + host + ":" + str(server.server_port)})
+                run("A1 loopback bypasses proxies: " + host, ["models"], changes={**proxyEnv, "JEV_API_BASE": "http://" + host + ":" + str(server.server_port)})
                 require(len(proxy.proxyRequests) == proxyCount, "A1 loopback never sends Authorization to a proxy: " + host)
                 require(len(state["requests"]) == directCount + 1, "A1 loopback reaches the origin directly: " + host)
 
             proxyCount = len(proxy.proxyRequests)
             run("A1 HTTPS retains proxy support", ["models"], 4, changes={**proxyEnv, "JEV_API_BASE": "https://fixture.invalid"})
             tunnels = proxy.proxyRequests[proxyCount:]
-            require(len(tunnels) == 3 and all(method == "CONNECT" for method, _, _ in tunnels), "A1 HTTPS attempts a proxy tunnel")
-            require(all("Authorization" not in headers for _, _, headers in tunnels), "A1 CONNECT excludes API credentials")
+            require(len(tunnels) == 3 and all(method == "CONNECT" and "Authorization" not in headers for method, _, headers in tunnels),
+                    "A1 HTTPS makes three CONNECT attempts without API credentials")
         finally:
             proxy.shutdown()
             proxyThread.join(timeout=5)
