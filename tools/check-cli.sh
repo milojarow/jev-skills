@@ -23,6 +23,8 @@ if len(sys.argv) > 3:
 cli = str(Path(sys.argv[2]).resolve() if len(sys.argv) == 3 else repo / "skills/jev-skill/bin/jev")
 fakeKey = "fixture-" + uuid.uuid4().hex
 otherKey = "fallback-" + uuid.uuid4().hex
+keyringKey = "keyring-" + uuid.uuid4().hex
+fixtureKeys = (fakeKey, otherKey, keyringKey)
 state = {"requests": [], "responses": [], "key": fakeKey, "process": None, "argvSeen": False}
 failures = []
 checks = 0
@@ -66,7 +68,7 @@ def require(condition, label):
 def checkArgv(process):
     command = Path(f"/proc/{process.pid}/cmdline").read_bytes()
     require(cli.encode() in command, "argv positive control sees the running CLI")
-    require(fakeKey.encode() not in command and otherKey.encode() not in command, "CLI argv excludes credentials")
+    require(all(secret.encode() not in command for secret in fixtureKeys), "CLI argv excludes credentials")
     children = Path(f"/proc/{process.pid}/task/{process.pid}/children").read_text().strip()
     require(not children, "CLI creates no child processes")
     argvClean = True
@@ -75,7 +77,7 @@ def checkArgv(process):
             command = path.read_bytes()
         except (FileNotFoundError, ProcessLookupError, PermissionError):
             continue
-        argvClean = argvClean and fakeKey.encode() not in command and otherKey.encode() not in command
+        argvClean = argvClean and all(secret.encode() not in command for secret in fixtureKeys)
     require(argvClean, "visible process argv excludes credentials")
     state["argvSeen"] = True
 
@@ -161,7 +163,7 @@ def run(label, args, expected=0, inputText=None, changes=None, watch=False, retu
     stdout = stdout.decode("utf-8", errors="replace")
     stderr = stderr.decode("utf-8", errors="replace")
     require(process.returncode == expected, label + ": expected exit " + str(expected) + ", got " + str(process.returncode))
-    require(all(secret not in stdout + stderr for secret in (fakeKey, otherKey)), label + ": no credential in output")
+    require(all(secret not in stdout + stderr for secret in fixtureKeys), label + ": no credential in output")
     if expected:
         require(stdout == "", label + ": stdout is empty on error")
         require(len(stderr.splitlines()) == 1, label + ": one stderr line")
@@ -176,6 +178,87 @@ def decodeOutput(text):
     except ValueError:
         failures.append("success output must be valid JSON")
         return {}
+
+
+def checkKeySources(testHome):
+    primary = "TYPESAFE_API_KEY='" + otherKey + "'\n"
+    keyring = '# Fixture only\nTYPESAFE_API_KEY="' + keyringKey + '"\n'
+    relativePaths = (".secrets/environment.d/11-secrets.conf", ".config/typesafe/keyring.env")
+    cases = [
+        ("R8-a keyring only", None, keyring, None, keyringKey),
+        ("R8-b first file wins", primary, keyring, None, otherKey),
+        ("R8-c first file lacks variable", "UNRELATED=ignored\n# " + primary, keyring, None, keyringKey),
+        ("R8-d export in keyring", None, keyring.replace("TYPESAFE_API_KEY=", "export TYPESAFE_API_KEY="), None, keyringKey),
+        ("R8-d export in first file", "  export " + primary, keyring, None, otherKey),
+        ("R8-e no credential", None, None, None, None),
+        ("R8-f environment wins both files", primary, keyring, fakeKey, fakeKey),
+        ("R8 empty first file value", "TYPESAFE_API_KEY=\n", keyring, None, keyringKey),
+        ("R8 final empty first file value", primary + "export TYPESAFE_API_KEY=''\n", keyring, None, keyringKey),
+        ("R8 empty environment", primary, keyring, "", otherKey),
+        ("R8 empty environment and first file", 'TYPESAFE_API_KEY=""\n', keyring, "", keyringKey),
+        ("R8 last assignment in first file", keyring + primary, None, None, otherKey),
+        ("R8 last assignment in keyring", None, primary + keyring, None, keyringKey),
+        ("R8 bare keyring assignment", None, "TYPESAFE_API_KEY=" + keyringKey + "\n", None, keyringKey),
+        ("R8 single quoted keyring", None, "export TYPESAFE_API_KEY='" + keyringKey + "'\n", None, keyringKey),
+        ("R8 final empty keyring value", None, keyring + 'TYPESAFE_API_KEY=""\n', None, None),
+        ("R8 invalid environment stops lookup", primary, keyring, fakeKey + " invalid", None),
+        ("R8 invalid first file stops lookup", "TYPESAFE_API_KEY='" + otherKey + " invalid'\n", keyring, None, None),
+        ("R8 invalid keyring value", None, "TYPESAFE_API_KEY='" + keyringKey + "\tinvalid'\n", None, None),
+    ]
+    for index, (label, first, second, envKey, expectedKey) in enumerate(cases):
+        keyHome = testHome / ("key-source-" + str(index))
+        for relativePath, content in zip(relativePaths, (first, second)):
+            if content is not None:
+                path = keyHome / relativePath
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+                path.chmod(0o600)
+        changes = {"HOME": str(keyHome), "TYPESAFE_API_KEY": envKey}
+        state["key"] = expectedKey or fakeKey
+        state["argvSeen"] = False
+        count = len(state["requests"])
+        stderr = run(label, ["noul", "Help requested?"], 0 if expectedKey else 3,
+                     inputText="Please help.", changes=changes, watch=True, returnError=True)
+        requests = state["requests"][count:]
+        if expectedKey:
+            require(len(requests) == 1 and requests[0][3].get("Authorization") == "Bearer " + expectedKey,
+                    label + ": exactly one request with the expected credential")
+            require(state["argvSeen"], label + ": process argv inspected during the request")
+        else:
+            require(not requests, label + ": no API request")
+            require("TYPESAFE_API_KEY" in stderr, label + ": diagnostic names the variable")
+        if first is None and second is None and envKey is None:
+            for relativePath in relativePaths:
+                require("~/" + relativePath in stderr, label + ": diagnostic names " + relativePath)
+
+    # A directory guarantees a read OSError even when the checker runs as root.
+    for unavailableIndex in (0, 1):
+        keyHome = testHome / ("unreadable-source-" + str(unavailableIndex))
+        unreadable = keyHome / relativePaths[unavailableIndex]
+        unreadable.mkdir(parents=True)
+        fallback = keyHome / relativePaths[1]
+        if unavailableIndex == 0:
+            fallback.parent.mkdir(parents=True)
+            fallback.write_text(keyring, encoding="utf-8")
+            fallback.chmod(0o600)
+        state["key"] = keyringKey
+        count = len(state["requests"])
+        run("R8 unreadable source " + str(unavailableIndex), ["models"], 0 if unavailableIndex == 0 else 3,
+            changes={"HOME": str(keyHome), "TYPESAFE_API_KEY": None})
+        require(len(state["requests"]) == count + int(unavailableIndex == 0), "R8 unreadable source request count")
+
+    # Echo the newly loaded key through both output paths to exercise redaction.
+    changes = {"HOME": str(testHome / "key-source-0"), "TYPESAFE_API_KEY": None}
+    state["key"] = keyringKey
+    for status, expected, reply in ((200, 0, {"models": [{"name": keyringKey}]}),
+                                    (422, 5, {"detail": "Invalid fixture field " + keyringKey})):
+        state["responses"] = [{"status": status, "json": reply}]
+        output = run("R8 keyring credential redaction " + str(status), ["models"], expected,
+                     changes=changes, returnError=bool(expected))
+        require("[REDACTED]" in output, "R8 keyring echo is redacted for HTTP " + str(status))
+        require(not state["responses"], "R8 keyring echo response consumed")
+        state["responses"] = []
+    state["key"] = fakeKey
 
 
 def checkErrorStreams():
@@ -376,14 +459,7 @@ with tempfile.TemporaryDirectory(prefix="jev-cli-") as temp:
             require(output == "0.25\n", "score plain returns fractional value")
             output = decodeOutput(run("single answer", ["choice", "Which route?", "-o", "support=Help", "-o", "none=No match", "--state", "help"]))
             require(output.get("type") == "choice" and "answers" not in output, "sugar defaults to one answer object")
-            state["key"] = otherKey
-            run("file fallback", ["models"], changes={"TYPESAFE_API_KEY": None})
-            run("empty environment fallback", ["models"], changes={"TYPESAFE_API_KEY": ""})
-            state["key"] = fakeKey
-            run("environment precedence", ["models"])
-            noKeyHome = testHome / "empty-home"
-            noKeyHome.mkdir()
-            run("missing key", ["models"], 3, changes={"TYPESAFE_API_KEY": None, "HOME": str(noKeyHome)})
+            checkKeySources(testHome)
 
             invalidCases = [
                 ("missing command", [], None),

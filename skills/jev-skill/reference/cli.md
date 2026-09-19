@@ -95,11 +95,18 @@ interpreter shutdown. A closed reader does not turn success into an API failure.
 
 ## Credentials and transport
 
-Credential lookup: nonempty `TYPESAFE_API_KEY` environment value, then an exact
-`TYPESAFE_API_KEY=` assignment in `~/.secrets/environment.d/11-secrets.conf`.
-Surrounding single/double quotes are supported. The file is read as data: no shell
-evaluation, interpolation, or sourcing. A supplied invalid environment credential
-does not trigger a second attempt with the file credential.
+Credential lookup uses the first nonempty `TYPESAFE_API_KEY`, in this order:
+environment, `~/.secrets/environment.d/11-secrets.conf`, then
+`~/.config/typesafe/keyring.env`. Absent or unreadable files, files without the
+variable, and files whose final assignment is empty are skipped.
+Both files use the same parser: `TYPESAFE_API_KEY=` assignments may have an
+`export ` prefix and surrounding single/double quotes; the last assignment wins
+within each file. Full-line comments beginning with `#` are ignored. Files are
+read as data: no shell evaluation, interpolation, or sourcing.
+A nonempty value must contain only printable ASCII characters without spaces.
+An invalid nonempty value or an API authentication rejection does not cause a
+retry with a lower-priority credential. Missing credentials exit with 3 and name
+the variable and both fallback paths, never credential values.
 
 Never place a real credential in command arguments or in a generated file.
 Inherit it from the existing environment or let the CLI read its existing location.

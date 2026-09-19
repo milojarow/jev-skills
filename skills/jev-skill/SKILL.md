@@ -163,9 +163,10 @@ compact JSON: the `answers` map for `ask`, one answer object for sugar commands.
 `-p/--plain` returns only the noul probability, choice key, or fractional score;
 it discards confidence and is unsuitable when confidence gates the action.
 
-The CLI reads `TYPESAFE_API_KEY` from the environment, then from
-`~/.secrets/environment.d/11-secrets.conf`. Never print its value, put it in
-process arguments, or copy it into a file. The CLI sends it only as a header.
+The CLI uses the first nonempty `TYPESAFE_API_KEY` from the environment,
+`~/.secrets/environment.d/11-secrets.conf`, then `~/.config/typesafe/keyring.env`.
+Never print its value, put it in process arguments, or copy it into a file.
+The CLI sends it only as a header.
 See [reference/cli.md](reference/cli.md) for input modes, errors, and retries.
 
 ## Write questions that mean exactly what they ask

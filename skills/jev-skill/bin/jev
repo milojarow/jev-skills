@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 DEFAULT_BASE = "https://api.typesafe.ai"
 ATTEMPTS = 3
 TIMEOUT = 30
@@ -208,18 +208,27 @@ def validateQuestions(questions):
 def loadKey():
     apiKey = os.environ.get("TYPESAFE_API_KEY", "").strip()
     if not apiKey:
-        try:
-            lines = (Path.home() / ".secrets/environment.d/11-secrets.conf").read_text(encoding="utf-8").splitlines()
-            for line in lines:
-                name, separator, value = line.strip().partition("=")
-                if separator and name == "TYPESAFE_API_KEY":
-                    apiKey = value.strip()
-                    if len(apiKey) >= 2 and apiKey[0] == apiKey[-1] and apiKey[0] in "\"'":
-                        apiKey = apiKey[1:-1]
-        except (OSError, UnicodeError):
-            pass
-    if not apiKey or any(ord(char) < 33 or ord(char) > 126 for char in apiKey):
-        fail(3, "missing or invalid TYPESAFE_API_KEY")
+        for relativePath in (".secrets/environment.d/11-secrets.conf", ".config/typesafe/keyring.env"):
+            try:
+                lines = (Path.home() / relativePath).read_text(encoding="utf-8").splitlines()
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith("export "):
+                        line = line[7:].lstrip()
+                    name, separator, value = line.partition("=")
+                    if separator and name == "TYPESAFE_API_KEY":
+                        apiKey = value.strip()
+                        if len(apiKey) >= 2 and apiKey[0] == apiKey[-1] and apiKey[0] in "\"'":
+                            apiKey = apiKey[1:-1]
+            except (OSError, UnicodeError):
+                continue
+            if apiKey:
+                break
+    if not apiKey:
+        fail(3, "missing TYPESAFE_API_KEY; checked environment, "
+             "~/.secrets/environment.d/11-secrets.conf and ~/.config/typesafe/keyring.env")
+    if any(ord(char) < 33 or ord(char) > 126 for char in apiKey):
+        fail(3, "invalid TYPESAFE_API_KEY")
     return apiKey
 
 

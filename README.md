@@ -26,9 +26,12 @@ See [decision use cases](skills/jev-skill/reference/use-cases.md) and the
 
 - Python 3 and its standard library on POSIX; the offline checker additionally
   requires Linux `/proc` to inspect process arguments.
-- Each machine's own TypeSafe credential, already in `TYPESAFE_API_KEY` or its
-  existing assignment in `~/.secrets/environment.d/11-secrets.conf`. Each user
-  keeps that credential locally; installation does not copy credentials.
+- Each machine's own TypeSafe credential. The CLI uses the first nonempty
+  `TYPESAFE_API_KEY` from the environment, `~/.secrets/environment.d/11-secrets.conf`,
+  then `~/.config/typesafe/keyring.env`. Both files accept an optional `export `
+  prefix and quotes; the last assignment in a file wins. Missing, unreadable,
+  or empty sources are skipped. Each user keeps that credential locally;
+  installation does not copy credentials.
 - Network access for live calls. The offline checker uses a local fake server and
   generated dummy credentials.
 
