@@ -1,0 +1,82 @@
+[
+  {
+    "query": "jev",
+    "should_trigger": true
+  },
+  {
+    "query": "Usa jev para revisar estas intenciones.",
+    "should_trigger": true
+  },
+  {
+    "query": "Pásaselo a jev.",
+    "should_trigger": true
+  },
+  {
+    "query": "Pregúntale a jev si el mensaje pide una baja.",
+    "should_trigger": true
+  },
+  {
+    "query": "¿Esto se puede decidir con jev?",
+    "should_trigger": true
+  },
+  {
+    "query": "Con JEV quiero clasificar estos mensajes.",
+    "should_trigger": true
+  },
+  {
+    "query": "Quiero resolver esta selección con TypeSafe.",
+    "should_trigger": true
+  },
+  {
+    "query": "Necesito un modelo System One para esta decisión.",
+    "should_trigger": true
+  },
+  {
+    "query": "Use a System One model to select a handler.",
+    "should_trigger": true
+  },
+  {
+    "query": "Haz las cuentas con jev.",
+    "should_trigger": true
+  },
+  {
+    "query": "Pídele a jev que escriba un poema.",
+    "should_trigger": true
+  },
+  {
+    "query": "Con jev, ordena estas fechas de más antigua a más reciente.",
+    "should_trigger": true
+  },
+  {
+    "query": "Escribe un poema sobre la lluvia.",
+    "should_trigger": false
+  },
+  {
+    "query": "Redacta tres párrafos para presentar el producto.",
+    "should_trigger": false
+  },
+  {
+    "query": "Suma 17 y 25 y calcula el promedio.",
+    "should_trigger": false
+  },
+  {
+    "query": "Cuenta los registros del archivo CSV.",
+    "should_trigger": false
+  },
+  {
+    "query": "Ordena estas fechas de más antigua a más reciente.",
+    "should_trigger": false
+  },
+  {
+    "query": "Calcula los días entre dos fechas con sus zonas horarias.",
+    "should_trigger": false
+  },
+  {
+    "query": "Generate a short story about a forest.",
+    "should_trigger": false
+  },
+  {
+    "query": "Calculate the invoice total and compare the due dates.",
+    "should_trigger": false
+  }
+]

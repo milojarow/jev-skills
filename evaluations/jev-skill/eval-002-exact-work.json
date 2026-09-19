@@ -1,0 +1,20 @@
+{
+  "id": "jev-002",
+  "skills": [
+    "jev-skill"
+  ],
+  "query": "Use Jev to count how many invoices are overdue, compare their due dates with today, calculate the exact total, and write a paragraph explaining the result.",
+  "expected_behavior": [
+    "Load jev-skill because the request explicitly mentions Jev; loading does not authorize or require an API call.",
+    "Keep date parsing, comparisons, counting, and totals in deterministic code.",
+    "Use a generative model for the requested explanation.",
+    "Only use Jev if a separate semantic selection judgment is actually needed; do not force it into exact work."
+  ],
+  "expected_content": [
+    "code",
+    "dates",
+    "generation"
+  ],
+  "priority": "high",
+  "notes": "Guards against extending semantic judgments to exact math, temporal ordering, and generation."
+}

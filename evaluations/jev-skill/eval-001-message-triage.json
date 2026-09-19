@@ -1,0 +1,21 @@
+{
+  "id": "jev-001",
+  "skills": [
+    "jev-skill"
+  ],
+  "query": "Build a workflow from incoming messages to a CRM. A message can ask for prices, complain, and request no further promotions at the same time. The team suggested a single LLM-generated JSON label. Show the decision design and how to invoke it.",
+  "expected_behavior": [
+    "Consider Jev for the bounded semantic decision inside the existing workflow.",
+    "Use a Choice for primary intent and independent Nouls for complaint and opt-out; keep purchase stage and urgency separate.",
+    "Batch independent questions in one ask request; include a no-match outcome.",
+    "Require positive/negative controls and language-specific measurement before CRM actions."
+  ],
+  "expected_content": [
+    "reference/use-cases.md",
+    "noul",
+    "choice",
+    "jev ask"
+  ],
+  "priority": "high",
+  "notes": "Guards against mutually exclusive labels hiding an opt-out and against smoke tests becoming calibration."
+}

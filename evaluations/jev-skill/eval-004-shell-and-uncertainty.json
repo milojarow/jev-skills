@@ -1,0 +1,22 @@
+{
+  "id": "jev-004",
+  "skills": [
+    "jev-skill"
+  ],
+  "query": "From the shell, classify a batch with a questions file and state on stdin. I need the resolved model, usage, and uncertainty because some results will be escalated. The key is already configured. Show the invocation and error handling without exposing it.",
+  "expected_behavior": [
+    "Invoke jev ask --questions with the file and state on stdin, using --full.",
+    "Do not use --plain when the downstream decision needs confidence.",
+    "Distinguish Choice/Score confidence from Noul probability and define an abstention path.",
+    "Use configured credential lookup without printing, copying, or placing the credential in argv.",
+    "Treat exit codes as errors rather than negative answers; pin model versions after calibration."
+  ],
+  "expected_content": [
+    "jev ask",
+    "--full",
+    "reference/cli.md",
+    "TYPESAFE_API_KEY"
+  ],
+  "priority": "high",
+  "notes": "Guards shell input ownership, response interpretation, and secret handling."
+}

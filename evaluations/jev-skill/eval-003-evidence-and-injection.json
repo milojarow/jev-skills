@@ -1,0 +1,22 @@
+{
+  "id": "jev-003",
+  "skills": [
+    "jev-skill"
+  ],
+  "query": "An answering model produced claims and citations. Screen a large batch of retrieved passages for support and injected instructions. Can a high Jev confidence replace all other verification?",
+  "expected_behavior": [
+    "Retrieve and chunk relevant text, ask atomic per-claim and per-passage questions, and name exact fields.",
+    "Verify source existence and exact quoted spans outside Jev.",
+    "Treat injection screening as fallible because adversarial state can steer Jev itself.",
+    "Require positive and negative controls; retain independent verification and review.",
+    "Read selected source evidence; do not equate confidence with truth or authorization."
+  ],
+  "expected_content": [
+    "reference/use-cases.md",
+    "confidence",
+    "positive",
+    "negative"
+  ],
+  "priority": "high",
+  "notes": "Guards against creating a sole verifier vulnerable to the material it screens."
+}

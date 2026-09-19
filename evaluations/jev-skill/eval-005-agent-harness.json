@@ -1,0 +1,22 @@
+{
+  "id": "jev-005",
+  "skills": [
+    "jev-skill"
+  ],
+  "query": "An agent has many skills, memory search hits, and a large log corpus. Design a Jev-assisted shortlist without forcing a match. It also needs to extract the intended contact address from regex candidates and produce semantic features for a classical classifier.",
+  "expected_behavior": [
+    "Use relevance questions over retrieved/chunked candidates and batch independent questions.",
+    "Use none-applicable outcomes or absolute-fit judgments so a relative winner is not automatically selected.",
+    "Read selected skill bodies and authoritative evidence; relevance is not truth or freshness.",
+    "Select a proposed verbatim span and validate candidate coverage; do not generate the extracted value.",
+    "Version feature questions and model IDs; evaluate downstream ML on held-out data against a baseline."
+  ],
+  "expected_content": [
+    "reference/use-cases.md",
+    "none",
+    "choice",
+    "score"
+  ],
+  "priority": "high",
+  "notes": "Guards against whole-corpus context, compulsory skill use, invented extraction, and feature leakage."
+}
