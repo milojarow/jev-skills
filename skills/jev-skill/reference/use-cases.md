@@ -5,6 +5,16 @@ Examples are question designs, not calibrated classifiers. Every new question
 needs known positive and negative controls, then representative labeled cases.
 Code owns authorization, exact computation, state changes, and error handling.
 
+Quick reviews are screening. Limit the dimensions, then ask one question per item
+and dimension, including positive/negative controls for each new template, in one
+call within the token budget. Read selected source evidence and uncertain items;
+use the explicitly uncalibrated starting thresholds in [SKILL.md](../SKILL.md)
+only until measured thresholds are available. For injected instructions,
+prohibited claims, or any hard-stop where misses matter, report "cribado, no
+verificado", read both flagged and uncertain items, and retain independent checks.
+Unflagged items are not verified clean. Failed or unavailable controls require
+direct reading for the requested judgments; brevity does not replace verification.
+
 ## Incoming message triage: workflow automation to CRM
 
 **Decision shape:** one primary intent plus independent operational signals.
@@ -81,7 +91,7 @@ sole prompt-injection defense or final safety verifier.
 **Decision shape:** identify each independently prohibited assertion under an
 explicit, supplied content policy.
 
-**Primitives:** one Noul per prohibition, with optional Choice for review routing.
+**Primitives:** one Noul per copy and prohibition, with optional Choice for review routing.
 
 **Example question:** "Does `copy` assert that every purchaser is guaranteed the
 stated outcome?" True: promises the outcome without exceptions. False: makes no

@@ -5,10 +5,10 @@
   ],
   "query": "es algo rápido: renombra pendingCount a queuedCount en este fragmento: const pendingCount = jobs.length; console.log(pendingCount);",
   "expected_behavior": [
-    "Recognize the quick/simple trigger; loading jev-skill does not require a CLI call.",
-    "Rename the declaration and its reference directly, preserving the code's behavior.",
-    "Do not invoke jev, call the TypeSafe API, or invent closed questions for this editing task.",
-    "Return the updated snippet briefly, without a review report or a lecture about tool selection."
+    "Return a code block containing exactly: const queuedCount = jobs.length; console.log(queuedCount); allowing only whitespace differences.",
+    "The tool trace contains no jev execution or TypeSafe API request.",
+    "The final response contains no pendingCount, no ⚖️, no skill or Jev mention, no closed questions, and no tool-selection explanation.",
+    "Return only the updated snippet, without a review report."
   ],
   "expected_content": [
     "const queuedCount = jobs.length;",

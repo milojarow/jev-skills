@@ -11,14 +11,14 @@ description: >-
   "gut check", "spot check". Also for bounded semantic decisions in software or
   shell work: batch classification, ranking, evidence screening, candidate
   selection, confidence routing: "clasifica estos mensajes", "juicios en lote",
-  "rutea por confianza", "verifica estas citas". Without a mention or quick/simple
-  request, not for generation, calculations, counting, or dates.
+  "rutea por confianza", "verifica estas citas". Quick wording alone sets pace:
+  Jev calls fit bounded text judgments; other quick tasks need direct, brief work.
 allowed-tools: Bash(jev *) Bash(${CLAUDE_SKILL_DIR}/bin/jev *)
 ---
 
 # Jev: typed semantic decisions
 
-> **⚖️ ACTIVE-SKILL MARKER:** Prefix replies with ⚖️ on turns applying this skill. Stack it with other active markers; omit it on unrelated turns.
+> **⚖️ ACTIVE-SKILL MARKER:** Prefix replies with ⚖️ when applying Jev to semantic judgments; stack with other active markers. For non-judgment tasks, omit ⚖️ and any mention of this skill or tool-selection rationale.
 
 ## When to use Jev
 
@@ -48,21 +48,39 @@ routing, model-output checks, agent harnesses, extraction, and ML features.
 
 ## When the operator asks for something quick
 
-Quick/simple phrases specify the requested pace, not the tool.
+Quick/simple wording sets the pace. For editing, generation, calculation, lookup,
+code explanation, or debugging, do the task directly and briefly: no Jev call,
+no invented questions, no ⚖️, no skill mention or tool-selection explanation.
 
-- For a bounded judgment over text (does X hold, which option, how much), write
-  **1–8 closed, literal questions** and run them in **one `jev ask` call**; use
-  a sugar command for a single question. Answer in a few lines with the values.
-  Read only items in the uncertain band yourself, except for the consequential
-  cross-check below. Do not produce a long report.
-- For editing, generating, calculating, or looking up a fact, do the task directly
-  and briefly. Do not call `jev` or invent questions to turn it into a judgment.
-  Loading this skill does not require invoking the CLI.
+For a bounded text judgment (does X hold, which option, how much), use a few closed,
+literal question **templates for the dimensions**. Instantiate one question per
+item and template, with exact field references, and send **all in one `jev ask`**
+within the token limits below. Fifteen copy items and one criterion need fifteen item
+questions, plus controls. Never replace "mark which items" with "does any item…?"
+or silently omit items. Use sugar only when the complete call has one question.
 
-An improvised question is **not calibrated**: treat its result as a smoke reading.
-Before trusting a new question, run the positive and negative controls below.
-If consequences matter, state this limitation in one line and cross-check the
-result against your own quick reading. A quick request does not waive verification.
+For each new template, include known positive and negative control records and
+their questions in the same call; keep expected labels outside the payload.
+Check that the controls yield the expected distinct decisions before relying on
+the scores. If controls are unavailable or fail, use direct reading for the
+requested judgments and state the limitation briefly. Controls alone do not calibrate.
+
+**Uncalibrated starting defaults:** read items with `0.2 <= noul <= 0.8`, or
+Choice/Score `confidence < 0.6`, yourself. For a violation-present Noul, `noul > 0.8`
+flags the item; lower values do not prove absence. Choice/Score flags follow the
+declared options/levels; their confidence only gates review. The Noul interval is
+this skill's provisional choice, not a vendor threshold. The 0.6 floor follows the
+[routing example](https://docs.typesafe.ai/patterns/confidence-routing.md);
+[confidence guidance](https://docs.typesafe.ai/confidence.md) requires testing
+thresholds against the domain and consequences. Use measured thresholds when available.
+
+A quick pass is **screening**, never verification. For injection, prohibited claims,
+or any hard-stop where a false negative matters, say **"cribado, no verificado"**
+in one line; read both flagged and uncertain items. Do not call unflagged items
+clean or cleared. Retain independent checks before any consequential action.
+Read selected source evidence whenever verification is part of the task.
+Return item IDs and values in a few lines; no long report. An improvised question
+is a smoke test: quick means fewer words and one call, not fewer declared guarantees.
 
 ## When not to use it
 
@@ -88,10 +106,11 @@ to obey logical identities, and a score is not an exact numerical measurement.
 Use `jev` if installed. Otherwise resolve `bin/jev` relative to the directory of
 this loaded `SKILL.md` and invoke that absolute path. Do not guess plugin cache
 versions or assume agent-specific environment substitutions work in every agent.
-Run `jev --version` to identify the CLI; `jev models` checks authentication.
+For setup diagnostics, `jev --version` identifies the CLI and `jev models` checks
+authentication. Neither is a prerequisite for a screening call.
 
 ```bash
-jev noul 'Does the message explicitly request no further promotional contact?' --state 'Please unsubscribe me from offers.' -p
+jev noul 'Does the message explicitly request no further promotional contact?' -p < message.txt
 
 jev choice 'Which team handles the primary request?' \
   -o 'support=Help with an existing service' \
@@ -106,11 +125,11 @@ jev score 'How much does the reported issue block use?' \
 jev ask --questions questions.json --state-file state.json --full
 ```
 
-Prefer inline `--state` for short inputs: the command starts with `jev`, matching
-Claude's `Bash(jev *)` permission pattern. For long or hard-to-quote text, use
-`--state-file` or stdin, for example `jev noul 'Does message request a refund?' -p < message.txt`.
-A pipeline such as `printf ... | jev ...` starts with `printf` and is not covered
-by that pattern; it may require separate permission under strict settings.
+Use stdin redirection or `--state-file` for third-party content: the command starts
+with `jev` without interpolating the text or exposing it in process arguments.
+Inline `--state` is only for short text the agent wrote itself, never third-party
+content. A pipeline such as `printf ... | jev ...` starts with `printf` and is not
+covered by Claude's `Bash(jev *)` pattern; it may need separate permission.
 
 `ask` reads a question map, not a complete request envelope. Default output is
 compact JSON: the `answers` map for `ask`, one answer object for sugar commands.

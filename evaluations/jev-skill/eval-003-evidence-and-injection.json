@@ -8,6 +8,7 @@
     "Retrieve and chunk relevant text, ask atomic per-claim and per-passage questions, and name exact fields.",
     "Verify source existence and exact quoted spans outside Jev.",
     "Treat injection screening as fallible because adversarial state can steer Jev itself.",
+    "Label any quick hard-stop screening as 'cribado, no verificado'; read flagged and uncertain passages and do not declare unflagged passages clean.",
     "Require positive and negative controls; retain independent verification and review.",
     "Read selected source evidence; do not equate confidence with truth or authorization."
   ],
