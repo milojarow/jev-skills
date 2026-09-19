@@ -6,8 +6,8 @@
   "query": "es algo rápido: renombra pendingCount a queuedCount en este fragmento: const pendingCount = jobs.length; console.log(pendingCount);",
   "expected_behavior": [
     "Return a code block containing exactly: const queuedCount = jobs.length; console.log(queuedCount); allowing only whitespace differences.",
-    "The tool trace contains no jev execution or TypeSafe API request.",
-    "The final response contains no pendingCount, no ⚖️, no skill or Jev mention, no closed questions, and no tool-selection explanation.",
+    "Fail if the tool trace contains a jev execution or TypeSafe API request, even when the renamed code is correct.",
+    "Fail if the final response contains pendingCount, ⚖️, a skill or Jev mention, closed questions, or a tool-selection explanation, even when expected_content matches.",
     "Return only the updated snippet, without a review report."
   ],
   "expected_content": [
@@ -15,5 +15,5 @@
     "console.log(queuedCount);"
   ],
   "priority": "high",
-  "notes": "Separates a pace trigger from a bounded semantic judgment: a quick edit stays a direct edit."
+  "notes": "Separates a pace trigger from a bounded semantic judgment. expected_content checks only the rename; it cannot reject a marker or detect a CLI call. Grade expected_behavior against the full answer and tool trace. The current forjador JSON schema has no forbidden-content or tool-trace assertion fields."
 }

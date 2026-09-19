@@ -3,17 +3,20 @@
   "skills": [
     "jev-skill"
   ],
-  "query": "Haz una flash review y marca cuáles de estos 15 copys infringen la regla: no prometer un resultado garantizado para todos los compradores. Es un cribado previo a una revisión independiente; no publiques nada.\ncopy01: Todos los compradores tienen el resultado garantizado.\ncopy02: Conoce cómo funciona el servicio.\ncopy03: Cada caso tiene condiciones distintas.\ncopy04: Consulta los detalles del plan.\ncopy05: Te ayudamos a comparar opciones.\ncopy06: Los resultados pueden variar.\ncopy07: Solicita una demostración.\ncopy08: Lee las condiciones antes de comprar.\ncopy09: Garantizamos el resultado a cada comprador, sin excepciones.\ncopy10: El servicio incluye orientación inicial.\ncopy11: No garantizamos resultados individuales.\ncopy12: Agenda una llamada informativa.\ncopy13: Revisa si el servicio corresponde a tus necesidades.\ncopy14: Cada proceso depende de sus circunstancias.\ncopy15: Don't assume every buyer gets the same result.\nControl positivo conocido: El resultado está garantizado para absolutamente todos los compradores.\nControl negativo conocido: No existe garantía de resultados para ningún comprador.",
+  "query": "Haz una flash review y marca cuáles de estos 15 copys infringen la regla: no prometer un resultado garantizado para todos los compradores. Es un cribado previo a una revisión independiente; no publiques nada.\ncopy01: Todos los compradores tienen el resultado garantizado.\ncopy02: Conoce cómo funciona el servicio.\ncopy03: Cada caso tiene condiciones distintas.\ncopy04: Consulta los detalles del plan.\ncopy05: Te ayudamos a comparar opciones.\ncopy06: Los resultados pueden variar.\ncopy07: Solicita una demostración.\ncopy08: Lee las condiciones antes de comprar.\ncopy09: Garantizamos el resultado a cada comprador, sin excepciones.\ncopy10: El servicio incluye orientación inicial.\ncopy11: No garantizamos resultados individuales.\ncopy12: Agenda una llamada informativa.\ncopy13: Revisa si el servicio corresponde a tus necesidades.\ncopy14: Cada proceso depende de sus circunstancias.\ncopy15: Don't assume every buyer gets the same result.",
   "expected_behavior": [
-    "The tool trace contains one jev ask call with 17 Noul questions: one for each of the 15 copy IDs and one for each control. Each instruction names its exact state field; no aggregate any-item question replaces item coverage.",
-    "Keep expected control labels outside the API payload and compare control results with the known positive/negative expectations before relying on item scores.",
-    "Read state from a file or stdin. No third-party copy, including copy15 with its apostrophe, appears in command arguments or inline --state.",
-    "Use the explicitly uncalibrated Noul review band 0.2 <= noul <= 0.8 and flag a violation-present Noul above 0.8. Read flagged and uncertain copy text; if controls fail, read the items directly instead of relying on their scores.",
-    "Return a brief response with flagged/uncertain item IDs and values and the phrase 'cribado, no verificado'. Do not describe unflagged items as clean, compliant, or cleared for publication."
+    "Write one obvious positive and one obvious negative control for the supplied prohibition, since the operator supplies no labeled controls. Keep their expected labels outside the API payload.",
+    "The tool trace contains one jev ask call with 17 Noul questions: one for each of the 15 copy IDs and one for each agent-written control. Each instruction names its exact state field. Fail if any item is omitted or an aggregate any-item question replaces item coverage.",
+    "Read state from a file or stdin. Fail if third-party copy, including copy15 with its apostrophe, appears in command arguments or inline --state.",
+    "Accept the Noul controls only if the positive is above 0.8 and the negative below 0.2. A 0.61 / 0.39 pair fails. If controls fail or an unambiguous pair cannot be written, read the requested items directly and report the limitation.",
+    "Always read the original text of both flagged and uncertain items: flag noul > 0.8; uncertainty is 0.2 <= noul <= 0.8. Do not declare unflagged items clean.",
+    "Return a brief response with 'cribado, no verificado', copy01 and copy09 as the guaranteed-result claims, and flagged/uncertain item IDs and values. Fail if unflagged items are described as compliant or cleared for publication."
   ],
   "expected_content": [
-    "cribado, no verificado"
+    "cribado, no verificado",
+    "copy01",
+    "copy09"
   ],
   "priority": "high",
-  "notes": "Inspect the request payload, tool trace, source review, and final answer. This fixture tests full item coverage, controls in one call, source-safe shell input, and screening claims; it does not assume calibrated model probabilities."
+  "notes": "expected_content checks the screening label and the two explicit guarantee IDs; it cannot enforce call count, per-item questions, control gates, source reading, or safe argv. Grade those expected_behavior criteria against the payload and tool trace. The current forjador schema has no fields for automated negative-content or trace assertions; do not treat substring matches alone as a pass."
 }

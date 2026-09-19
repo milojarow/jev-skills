@@ -6,14 +6,18 @@ needs known positive and negative controls, then representative labeled cases.
 Code owns authorization, exact computation, state changes, and error handling.
 
 Quick reviews are screening. Limit the dimensions, then ask one question per item
-and dimension, including positive/negative controls for each new template, in one
-call within the token budget. Read selected source evidence and uncertain items;
-use the explicitly uncalibrated starting thresholds in [SKILL.md](../SKILL.md)
-only until measured thresholds are available. For injected instructions,
-prohibited claims, or any hard-stop where misses matter, report "cribado, no
-verificado", read both flagged and uncertain items, and retain independent checks.
-Unflagged items are not verified clean. Failed or unavailable controls require
-direct reading for the requested judgments; brevity does not replace verification.
+and dimension in one call within the token budget. For each new template, use the
+operator's labeled examples or write an obvious positive and negative yourself;
+include their questions in the same call and keep expected labels outside the payload.
+Apply the control gates and uncalibrated starting thresholds in [SKILL.md](../SKILL.md):
+Noul positive `> 0.8`, negative `< 0.2`; Choice/Score expected option/level with
+`confidence >= 0.6`, with any Score-to-level mapping declared before calling.
+A 0.61 / 0.39 Noul pair fails. Use measured thresholds when available.
+**Always read the original text of both flagged and uncertain items; never declare
+unflagged items clean.** For injected instructions, prohibited claims, or any hard-stop
+where misses matter, report "cribado, no verificado" and retain independent checks.
+If an obvious control cannot be written or controls fail, read the requested items
+directly and say why in one line. Brevity does not replace verification.
 
 ## Incoming message triage: workflow automation to CRM
 

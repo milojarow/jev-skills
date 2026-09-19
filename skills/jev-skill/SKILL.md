@@ -57,28 +57,33 @@ literal question **templates for the dimensions**. Instantiate one question per
 item and template, with exact field references, and send **all in one `jev ask`**
 within the token limits below. Fifteen copy items and one criterion need fifteen item
 questions, plus controls. Never replace "mark which items" with "does any item…?"
-or silently omit items. Use sugar only when the complete call has one question.
+or silently omit items. Sugar is only for one question with an already tested template.
 
-For each new template, include known positive and negative control records and
-their questions in the same call; keep expected labels outside the payload.
-Check that the controls yield the expected distinct decisions before relying on
-the scores. If controls are unavailable or fail, use direct reading for the
-requested judgments and state the limitation briefly. Controls alone do not calibrate.
+For each new template, use the operator's labeled examples or **write one obvious
+positive and one obvious negative yourself**. Include both controls and their
+questions in the same call; keep expected labels outside the payload. If you cannot
+write an unambiguous control or either control fails, read the requested items
+directly and say why in one line. Controls alone do not calibrate a template.
 
-**Uncalibrated starting defaults:** read items with `0.2 <= noul <= 0.8`, or
-Choice/Score `confidence < 0.6`, yourself. For a violation-present Noul, `noul > 0.8`
-flags the item; lower values do not prove absence. Choice/Score flags follow the
-declared options/levels; their confidence only gates review. The Noul interval is
-this skill's provisional choice, not a vendor threshold. The 0.6 floor follows the
+**Uncalibrated starting defaults and control gates:**
+
+- Noul: flag `noul > 0.8`; `0.2 <= noul <= 0.8` is uncertain. Controls pass only
+  when the positive is `> 0.8` and the negative is `< 0.2`. A 0.61 / 0.39 pair fails.
+- Choice/Score: flag by the declared options/levels; `confidence < 0.6` is uncertain.
+  Each control must match its expected option/level with `confidence >= 0.6`.
+  Declare any Score-to-level mapping before calling; do not choose it after seeing results.
+
+**Always read the original text of both flagged and uncertain items; never declare
+unflagged items clean.** This applies to every quick review, including routine triage.
+The Noul interval is this skill's provisional choice, not a vendor threshold.
+The 0.6 floor follows the
 [routing example](https://docs.typesafe.ai/patterns/confidence-routing.md);
 [confidence guidance](https://docs.typesafe.ai/confidence.md) requires testing
 thresholds against the domain and consequences. Use measured thresholds when available.
 
 A quick pass is **screening**, never verification. For injection, prohibited claims,
 or any hard-stop where a false negative matters, say **"cribado, no verificado"**
-in one line; read both flagged and uncertain items. Do not call unflagged items
-clean or cleared. Retain independent checks before any consequential action.
-Read selected source evidence whenever verification is part of the task.
+in one line. Retain independent checks before any consequential action.
 Return item IDs and values in a few lines; no long report. An improvised question
 is a smoke test: quick means fewer words and one call, not fewer declared guarantees.
 
@@ -109,20 +114,41 @@ versions or assume agent-specific environment substitutions work in every agent.
 For setup diagnostics, `jev --version` identifies the CLI and `jev models` checks
 authentication. Neither is a prerequisite for a screening call.
 
+### Canonical quick review: items and controls in one call
+
+Example `review-state.json`: two items and two agent-written controls. Keep the
+expected labels outside both JSON files: `c1` is positive; `c2` is negative.
+
+```json
+{
+  "items": {"a": "The service failed again and I am unhappy.", "b": "Everything works. Thanks."},
+  "controls": {"c1": "I am dissatisfied with the service.", "c2": "I am happy with the service."}
+}
+```
+
+`review-questions.json` repeats one template with exact field references:
+
+```json
+{
+  "a": {"type": "noul", "instructions": "Does items.a explicitly express dissatisfaction with the service?"},
+  "b": {"type": "noul", "instructions": "Does items.b explicitly express dissatisfaction with the service?"},
+  "c1": {"type": "noul", "instructions": "Does controls.c1 explicitly express dissatisfaction with the service?"},
+  "c2": {"type": "noul", "instructions": "Does controls.c2 explicitly express dissatisfaction with the service?"}
+}
+```
+
+```bash
+jev ask --questions review-questions.json --state-file review-state.json
+```
+
+The output is an answers map. First require `c1.noul > 0.8` and `c2.noul < 0.2`;
+otherwise read directly and report failed controls. Then apply the bands and source
+reading rule above to `a` and `b`; report their IDs/values, excluding the control IDs.
+
+For **one question whose template has already passed controls**, sugar is sufficient:
+
 ```bash
 jev noul 'Does the message explicitly request no further promotional contact?' -p < message.txt
-
-jev choice 'Which team handles the primary request?' \
-  -o 'support=Help with an existing service' \
-  -o 'sales=Information before purchasing' \
-  -o 'none=None of these applies' --state-file message.txt
-
-jev score 'How much does the reported issue block use?' \
-  -l 'Cosmetic issue; all functions work' \
-  -l 'A function fails; a workaround is stated' \
-  -l 'The service is unusable; no workaround is stated' --state-file message.txt
-
-jev ask --questions questions.json --state-file state.json --full
 ```
 
 Use stdin redirection or `--state-file` for third-party content: the command starts
@@ -158,10 +184,9 @@ See [reference/cli.md](reference/cli.md) for input modes, errors, and retries.
 - Use structured criteria through `ask` when boundaries need definitions/examples;
   keep the examples representative and test against separate inputs.
 
-Before trusting a new question, run a **known positive and a known negative**.
-Confirm that both reach the intended evidence and produce distinct expected
-decisions. Then test ambiguity, missing evidence, mixed intentions, and adversarial
-cases on labeled data. These controls are necessary, not a complete calibration.
+Before trusting a new template, create and run its **positive and negative controls**
+and require the control gates above. Then test ambiguity, missing evidence, mixed
+intentions, and adversarial cases on labeled data; passing controls is not calibration.
 Even a calibrated Jev must not be the only verifier: retain source checks,
 deterministic controls, and independent review where the task needs verification.
 
@@ -171,24 +196,6 @@ All questions see the same state and cannot see one another's answers. Ask many
 independent questions in **one `jev ask`**, including branch-specific questions;
 code ignores answers from irrelevant branches. A later answer that changes the
 evidence or available options requires a new call.
-
-```json
-{
-  "unsubscribe": {
-    "type": "noul",
-    "instructions": "Does message explicitly request no more promotional contact?"
-  },
-  "complaint": {
-    "type": "noul",
-    "instructions": "Does message express dissatisfaction with the service?"
-  },
-  "intent": {
-    "type": "choice",
-    "instructions": "What is the primary purpose of message?",
-    "criteria": {"buy":"Discuss a new purchase","support":"Help with existing service","none":"Neither applies"}
-  }
-}
-```
 
 For multiple records, give each a stable field/position and write one question per
 record and dimension, naming that exact field in the instruction. Build question

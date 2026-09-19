@@ -55,6 +55,24 @@ Choice keys must be nonempty and unique; split options at the first `=`.
 Score takes 2–10 ordered levels. For structured instructions/criteria, use `ask`
 and the shapes documented in the live advanced-structure reference.
 
+### Single-question examples for already tested templates
+
+Use these shortcuts only after the template has passed positive/negative controls.
+For a new template, use the [canonical quick-review example](../SKILL.md#canonical-quick-review-items-and-controls-in-one-call)
+to send item questions and agent-written controls in one `jev ask` call.
+
+```bash
+jev choice 'Which team handles the primary request?' \
+  -o 'support=Help with an existing service' \
+  -o 'sales=Information before purchasing' \
+  -o 'none=None of these applies' --state-file message.txt
+
+jev score 'How much does the reported issue block use?' \
+  -l 'Cosmetic issue; all functions work' \
+  -l 'A function fails; a workaround is stated' \
+  -l 'The service is unusable; no workaround is stated' --state-file message.txt
+```
+
 ## Output
 
 - `ask`: compact `answers` JSON map.

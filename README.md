@@ -38,7 +38,10 @@ or a generated file. Neither the CLI nor the installer provisions a credential.
 ## Try the bundled executable
 
 Use an existing UTF-8 `message.txt` for the last command; third-party text belongs
-in a file or stdin, not inline shell arguments.
+in a file or stdin, not inline shell arguments. That single-question shortcut
+requires an already tested template. For a new template, follow the
+[canonical quick review](skills/jev-skill/SKILL.md#canonical-quick-review-items-and-controls-in-one-call)
+with agent-written controls in the same batch.
 
 ```bash
 skills/jev-skill/bin/jev --version
