@@ -1,0 +1,27 @@
+{
+  "name": "jev-skills",
+  "description": "Jev decision tooling for coding agents.",
+  "owner": {
+    "name": "Jev Skills contributors"
+  },
+  "plugins": [
+    {
+      "name": "jev-skills",
+      "source": "./",
+      "description": "Typed semantic decisions with Jev: a shared agent skill and standard-library CLI.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Jev Skills contributors"
+      },
+      "category": "development",
+      "repository": "https://github.com/milojarow/jev-skills",
+      "homepage": "https://github.com/milojarow/jev-skills",
+      "keywords": [
+        "jev",
+        "typesafe",
+        "decisions"
+      ],
+      "license": "MIT"
+    }
+  ]
+}

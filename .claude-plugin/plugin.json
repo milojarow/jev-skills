@@ -1,0 +1,16 @@
+{
+  "name": "jev-skills",
+  "version": "0.1.0",
+  "description": "Typed semantic decisions with Jev: a shared agent skill and standard-library CLI.",
+  "author": {
+    "name": "Jev Skills contributors"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/milojarow/jev-skills",
+  "homepage": "https://github.com/milojarow/jev-skills",
+  "keywords": [
+    "jev",
+    "typesafe",
+    "decisions"
+  ]
+}
