@@ -210,7 +210,7 @@ def loadKey():
     if not apiKey:
         for relativePath in (".secrets/environment.d/11-secrets.conf", ".config/typesafe/keyring.env"):
             try:
-                lines = (Path.home() / relativePath).read_text(encoding="utf-8").splitlines()
+                lines = (Path.home() / relativePath).read_text(encoding="utf-8-sig").splitlines()
                 for line in lines:
                     line = line.strip()
                     if line.startswith("export "):
@@ -220,6 +220,9 @@ def loadKey():
                         apiKey = value.strip()
                         if len(apiKey) >= 2 and apiKey[0] == apiKey[-1] and apiKey[0] in "\"'":
                             apiKey = apiKey[1:-1]
+            except RuntimeError:
+                # No home directory means neither fallback path is available.
+                break
             except (OSError, UnicodeError):
                 continue
             if apiKey:

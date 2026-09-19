@@ -40,6 +40,23 @@ def rejectNetwork(event, args):
 sys.addaudithook(rejectNetwork)
 runpy.run_path(cli, run_name='__main__')
 """
+missingHomeGuard = """
+import os, pwd, runpy, sys
+from pathlib import Path
+cli = sys.argv[1]
+sys.argv = [cli] + sys.argv[2:]
+assert 'HOME' not in os.environ, 'Fixture must remove HOME'
+def missingUser(uid):
+    raise KeyError(uid)
+pwd.getpwuid = missingUser
+try:
+    Path.home()
+except RuntimeError:
+    pass
+else:
+    raise AssertionError('Fixture must make Path.home() raise RuntimeError')
+runpy.run_path(cli, run_name='__main__')
+"""
 errorStreamGuard = """
 import os, runpy, sys
 cli, mode, code = sys.argv[1:]
@@ -141,12 +158,16 @@ http.server.BaseHTTPRequestHandler.do_CONNECT = handleRequest
 http.server.BaseHTTPRequestHandler.log_message = lambda *args: None
 
 
-def run(label, args, expected=0, inputText=None, changes=None, watch=False, returnError=False, timeout=20, networkLog=None):
+def run(label, args, expected=0, inputText=None, changes=None, watch=False, returnError=False, timeout=20, networkLog=None, missingHome=False):
     state["process"] = None
     childEnv = env.copy()
     childEnv.update(changes or {})
     childEnv = {k: v for k, v in childEnv.items() if v is not None}
-    command = [cli] + args if networkLog is None else [sys.executable, "-c", networkGuard, cli, str(networkLog)] + args
+    command = [cli] + args
+    if networkLog is not None:
+        command = [sys.executable, "-c", networkGuard, cli, str(networkLog)] + args
+    elif missingHome:
+        command = [sys.executable, "-c", missingHomeGuard, cli] + args
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=childEnv)
     inputBytes = inputText.encode("utf-8") if isinstance(inputText, str) else inputText
     if watch:
@@ -204,6 +225,8 @@ def checkKeySources(testHome):
         ("R8 invalid environment stops lookup", primary, keyring, fakeKey + " invalid", None),
         ("R8 invalid first file stops lookup", "TYPESAFE_API_KEY='" + otherKey + " invalid'\n", keyring, None, None),
         ("R8 invalid keyring value", None, "TYPESAFE_API_KEY='" + keyringKey + "\tinvalid'\n", None, None),
+        ("R9 BOM keyring only", None, b"\xef\xbb\xbfTYPESAFE_API_KEY=" + keyringKey.encode() + b"\n", None, keyringKey),
+        ("R9 BOM first file wins", b"\xef\xbb\xbfTYPESAFE_API_KEY=" + otherKey.encode() + b"\n", keyring, None, otherKey),
     ]
     for index, (label, first, second, envKey, expectedKey) in enumerate(cases):
         keyHome = testHome / ("key-source-" + str(index))
@@ -211,7 +234,12 @@ def checkKeySources(testHome):
             if content is not None:
                 path = keyHome / relativePath
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(content, encoding="utf-8")
+                if isinstance(content, bytes):
+                    path.write_bytes(content)
+                    require(path.read_bytes().startswith(b"\xef\xbb\xbfTYPESAFE_API_KEY="),
+                            label + ": fixture starts with BOM bytes and an assignment")
+                else:
+                    path.write_text(content, encoding="utf-8")
                 path.chmod(0o600)
         changes = {"HOME": str(keyHome), "TYPESAFE_API_KEY": envKey}
         state["key"] = expectedKey or fakeKey
@@ -259,6 +287,22 @@ def checkKeySources(testHome):
         require(not state["responses"], "R8 keyring echo response consumed")
         state["responses"] = []
     state["key"] = fakeKey
+
+    for envKey in (None, "", fakeKey):
+        label = "R9 unavailable home " + ("with environment key" if envKey else "without environment key")
+        count = len(state["requests"])
+        stderr = run(label, ["noul", "Help requested?"], 0 if envKey else 3, inputText="Please help.",
+                     changes={"HOME": None, "TYPESAFE_API_KEY": envKey}, watch=True,
+                     returnError=True, missingHome=True)
+        requests = state["requests"][count:]
+        if envKey:
+            require(len(requests) == 1 and requests[0][3].get("Authorization") == "Bearer " + fakeKey,
+                    label + ": environment still authenticates without a home directory")
+        else:
+            require(not requests, label + ": no API request")
+            require("missing TYPESAFE_API_KEY" in stderr, label + ": missing credential diagnostic")
+            for relativePath in relativePaths:
+                require("~/" + relativePath in stderr, label + ": diagnostic names " + relativePath)
 
 
 def checkErrorStreams():
