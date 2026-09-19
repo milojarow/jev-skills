@@ -1,0 +1,27 @@
+{
+  "id": "jev-008",
+  "skills": [
+    "jev-skill"
+  ],
+  "query": "Diseña un agente rápido con Jev que recorra una interfaz para completar una búsqueda y aplicar filtros. Hay botones, campos editables y listas desplegables; la interfaz puede cambiar entre observar y actuar. Necesito escoger el siguiente paso con poca latencia y saber cuándo terminó de verdad. Explícame el diseño y muestra las preguntas de un ciclo. Solo diseña: no abras el navegador ni llames a APIs.",
+  "expected_behavior": [
+    "Consult reference/use-cases.md for the indexed action-loop pattern and reference/cli.md for latency and persistent-client guidance. Propose a design without executing browser actions or API calls.",
+    "Show one request containing an operation Choice and speculative target Choices for each available operation needing a destination. Each target instruction explicitly assumes its operation; code consumes only the matching target head. Fail if operation and target require serial model calls or a target question depends on reading another answer.",
+    "Use code-owned indices of observed compatible elements with structured labels, current values, and state. Cap each Choice at 255 options and exclude truncated candidates from execution. Fail if Jev is asked to invent selectors, coordinates, commands, or executable code.",
+    "Keep explicit DONE and BLOCKED options. Require independent code to verify the actual goal outcome; fail if DONE, high confidence, or valid IDs alone are treated as evidence of success or permission.",
+    "Validate chosen IDs and exact probability-key coverage before execution; recheck relevant state and target freshness, including after text generation. Consume a decision once, never retry a mutation, and record execution before observing its effect.",
+    "Use a small generative helper only when the chosen operation needs free text, validate its output, and keep Jev responsible for selection. Fail if Jev is proposed as the text generator.",
+    "Reuse one persistent HTTP client with keep-alive/HTTP2, send one decision request per cycle, trim state, cap recent history, and bound actions and request attempts including retries/helper calls. Fail if a fresh CLI subprocess or a fresh HTTP client is proposed for every low-latency iteration.",
+    "Use short bounded retries only for 429/529/503 in the proposed application, honoring Retry-After or stopping when the wait exceeds budget. State that observed text is untrusted data and the instruction is not a security boundary. Do not claim general reliability from the example's few tasks."
+  ],
+  "expected_content": [
+    "operation",
+    "click_target",
+    "type_text_target",
+    "select_target",
+    "DONE",
+    "BLOCKED"
+  ],
+  "priority": "high",
+  "notes": "Grade the proposed request, executor, and transport design against expected_behavior; keyword presence alone is not a pass. The existing schema has no automatic negative-content or tool-trace fields. This scenario checks architecture, not live task success or latency."
+}

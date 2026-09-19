@@ -145,6 +145,47 @@ but these retries do not provide exactly-once billing. The returned response is
 from the attempt that completed successfully; earlier attempts may have completed
 at the service even though their responses did not reach the CLI.
 
+## Latency and persistent clients
+
+Reuse **one persistent HTTP client** (keep-alive, with HTTP/2 when supported) for
+software that makes repeated decisions. Send the operation and all speculative
+target heads in one request per cycle, keep only visible/relevant state, and cap
+recent history. See the [indexed action-loop pattern](use-cases.md#run-an-agent-loop-over-indexed-actions).
+
+Measurements supplied by the director on 2026-09-19 used the same machine and
+question against the real API:
+
+| HTTPS connection | Median | Range | Sample |
+| --- | --- | --- | --- |
+| New connection per call | 484 ms | 414–780 ms | n=5 |
+| Reused connection | 209 ms | 174–232 ms | n=8 |
+
+The gap points to connection establishment as the dominant avoidable cost in
+these measurements, rather than model work. These are client-observed timings,
+not isolated inference measurements or a latency guarantee; measure your workload.
+
+The public [performance report](https://github.com/browser-use/jev-ultrafast/blob/1231850a0b/docs/performance.md)
+records a 178 ms median per Jev request and 17 requests in a 7.073 s task (about
+7.1 s). Its [model client](https://github.com/browser-use/jev-ultrafast/blob/1231850a0b/jev_ultrafast/model.py)
+reuses an HTTP/2-enabled client. The task timing includes text generation, browser
+work, stale decisions, and loading waits; it excludes browser setup, initial
+navigation/observation, and fresh independent post-run verification. This is
+project-reported evidence on a narrow task, not a benchmark rerun for this skill.
+
+For this low-latency software policy, retry decision requests briefly and with
+bounded backoff **only on 429/529/503**. Honor `Retry-After`; if it exceeds the loop's
+remaining wait budget, stop/escalate rather than retry early. Count attempts and
+text-helper calls in the request budget. Transport failure or an uncertain mutation
+must not replay a browser, CLI, or workflow action. The example uses fixed 0.5/1 s
+backoff and omits `Retry-After`; follow [TypeSafe's documented guidance](https://docs.typesafe.ai/models.md)
+for that header instead of copying the omission.
+
+The bundled `jev` CLI is single-shot: separate invocations create fresh connections
+and each pays connection setup. Combine an agent's shell judgments into **one
+`jev ask`**, and use a persistent client in application code for a low-latency loop.
+The loop policy above does not change the CLI's existing three-attempt retry policy
+for 429/all 5xx/network errors, documented under Credentials and transport.
+
 ## Exit codes
 
 | Exit | Meaning | Next step |

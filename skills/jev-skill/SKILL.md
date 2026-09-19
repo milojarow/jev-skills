@@ -44,7 +44,7 @@ batches, rank retrieved candidates, or select evidence before reading finalists.
 Only send material within the task's authorized data scope.
 
 Read [reference/use-cases.md](reference/use-cases.md) for message triage, confidence
-routing, model-output checks, agent harnesses, extraction, and ML features.
+routing, model-output checks, indexed action loops, agent harnesses, extraction, and ML features.
 
 ## When the operator asks for something quick
 
@@ -204,6 +204,15 @@ maps in code. Chunk large corpora after retrieval; shared state is not free cont
 The documented 1.13 limits are 64k tokens for state plus all questions, and 32k for
 state plus the longest question. Check live limits before sizing production batches;
 character counts are not exact token counts.
+
+For software loops, reuse **one persistent HTTP client** (keep-alive/HTTP/2):
+operation and speculative target heads share **one request per decision cycle**.
+Trim state and bound recent history. Connection setup is the dominant avoidable
+cost in the supplied fresh-versus-reused measurements; see
+[latency evidence and loop policy](reference/cli.md#latency-and-persistent-clients).
+Use short, bounded retries only for 429/529/503, honoring `Retry-After`.
+The CLI is single-shot and pays connection setup on every invocation: combine
+shell judgments in **one `jev ask`**; do not put it in a low-latency loop.
 
 ## Confidence is a second decision axis
 
