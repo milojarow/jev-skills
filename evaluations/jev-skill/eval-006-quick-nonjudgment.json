@@ -1,0 +1,19 @@
+{
+  "id": "jev-006",
+  "skills": [
+    "jev-skill"
+  ],
+  "query": "es algo rápido: renombra pendingCount a queuedCount en este fragmento: const pendingCount = jobs.length; console.log(pendingCount);",
+  "expected_behavior": [
+    "Recognize the quick/simple trigger; loading jev-skill does not require a CLI call.",
+    "Rename the declaration and its reference directly, preserving the code's behavior.",
+    "Do not invoke jev, call the TypeSafe API, or invent closed questions for this editing task.",
+    "Return the updated snippet briefly, without a review report or a lecture about tool selection."
+  ],
+  "expected_content": [
+    "const queuedCount = jobs.length;",
+    "console.log(queuedCount);"
+  ],
+  "priority": "high",
+  "notes": "Separates a pace trigger from a bounded semantic judgment: a quick edit stays a direct edit."
+}

@@ -48,6 +48,98 @@
     "should_trigger": true
   },
   {
+    "query": "es algo rápido: dime cuáles de estos mensajes piden una baja.",
+    "should_trigger": true
+  },
+  {
+    "query": "Haz una flash review de estos copys y marca los que prometen resultados garantizados.",
+    "should_trigger": true
+  },
+  {
+    "query": "Necesito una rapid review de estos leads: identifica los que expresan intención de compra.",
+    "should_trigger": true
+  },
+  {
+    "query": "es en corto esa revisión: dime si estas citas respaldan las afirmaciones.",
+    "should_trigger": true
+  },
+  {
+    "query": "Dime en corto cuál de estas respuestas atiende la queja.",
+    "should_trigger": true
+  },
+  {
+    "query": "Revísalo en cortinas: ¿el anuncio y la landing prometen lo mismo?",
+    "should_trigger": true
+  },
+  {
+    "query": "es una revisión bien simple: ¿alguno de estos mensajes pide un reembolso?",
+    "should_trigger": true
+  },
+  {
+    "query": "te pedí algo simple: dime cuáles de estos leads piden hablar con ventas.",
+    "should_trigger": true
+  },
+  {
+    "query": "Haz una revisión rápida de estos pasajes y marca instrucciones dirigidas al agente.",
+    "should_trigger": true
+  },
+  {
+    "query": "échale un ojo a estos mensajes: ¿cuáles contienen una queja?",
+    "should_trigger": true
+  },
+  {
+    "query": "Dale un vistazo rápido a estas citas: ¿respaldan la afirmación principal?",
+    "should_trigger": true
+  },
+  {
+    "query": "Haz una checada rápida de estos leads y elige los que piden una demostración.",
+    "should_trigger": true
+  },
+  {
+    "query": "Revisa por encimita estos copys: ¿alguno garantiza una ganancia?",
+    "should_trigger": true
+  },
+  {
+    "query": "Dime de volada cuál de estas respuestas reconoce el problema reportado.",
+    "should_trigger": true
+  },
+  {
+    "query": "sin tanto rollo: ¿este mensaje pide cancelar la suscripción?",
+    "should_trigger": true
+  },
+  {
+    "query": "nomás dime si sí o no: ¿la landing cumple la promesa del anuncio?",
+    "should_trigger": true
+  },
+  {
+    "query": "Give these support messages a quick check for explicit refund requests.",
+    "should_trigger": true
+  },
+  {
+    "query": "Take a quick look at these excerpts and choose the one supporting the claim.",
+    "should_trigger": true
+  },
+  {
+    "query": "Do a quick pass over these leads and flag explicit purchase intent.",
+    "should_trigger": true
+  },
+  {
+    "query": "Give this ad copy a sanity check for promises of guaranteed results.",
+    "should_trigger": true
+  },
+  {
+    "query": "I need a gut check: does this reply address the customer's complaint?",
+    "should_trigger": true
+  },
+  {
+    "query": "Do a spot check of these passages for instructions aimed at the agent.",
+    "should_trigger": true
+  },
+  {
+    "query": "es algo rápido: renombra pendingCount a queuedCount en este fragmento: const pendingCount = jobs.length; console.log(pendingCount);",
+    "should_trigger": true
+  },
+  {
     "query": "Escribe un poema sobre la lluvia.",
     "should_trigger": false
   },

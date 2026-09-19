@@ -1,14 +1,18 @@
 ---
 name: jev-skill
 description: >-
-  Use whenever the user mentions Jev, TypeSafe, or a System One model, in English
-  or Spanish, including "jev", "usa jev", "pásaselo a jev", "pregúntale a jev",
-  or "con jev". Also use when building bounded semantic decisions instead of an
-  LLM prompt-and-parse step, or when an agent needs batch classification, ranking,
-  evidence screening, candidate selection, or confidence routing from the shell:
-  "clasifica estos mensajes", "juicios en lote", "rutea por confianza",
-  "verifica estas citas". Without an explicit mention, not for text generation,
-  exact calculations, counting, or date comparisons.
+  Use whenever Jev, TypeSafe, or a System One model is mentioned in English or
+  Spanish: "jev", "usa jev", "pásaselo a jev", "pregúntale a jev", "con jev".
+  Also for quick/simple requests: "es algo rápido", "flash review", "rapid review",
+  "es en corto esa revisión", "en corto", "en cortinas", "es una revisión bien simple",
+  "te pedí algo simple", "revisión rápida", "échale un ojo", "un vistazo rápido",
+  "checada rápida", "por encimita", "de volada", "sin tanto rollo",
+  "nomás dime si sí o no", "quick check", "quick look", "quick pass", "sanity check",
+  "gut check", "spot check". Also for bounded semantic decisions in software or
+  shell work: batch classification, ranking, evidence screening, candidate
+  selection, confidence routing: "clasifica estos mensajes", "juicios en lote",
+  "rutea por confianza", "verifica estas citas". Without a mention or quick/simple
+  request, not for generation, calculations, counting, or dates.
 allowed-tools: Bash(jev *) Bash(${CLAUDE_SKILL_DIR}/bin/jev *)
 ---
 
@@ -18,9 +22,10 @@ allowed-tools: Bash(jev *) Bash(${CLAUDE_SKILL_DIR}/bin/jev *)
 
 ## When to use Jev
 
-An explicit mention is sufficient to load this skill, regardless of capitalization.
-Loading the skill does not imply calling the API: if the requested operation is a
-poor fit, explain the boundary below and use code or another model as appropriate.
+An explicit mention or a quick/simple request is sufficient to load this skill,
+regardless of capitalization. Loading the skill does not imply calling the API.
+For operations outside its fit, do the task directly and briefly with the
+appropriate tool.
 
 Jev takes text or structured text as `state` plus typed `questions` and returns
 values and probabilities. It does not generate explanations. Code owns actions.
@@ -40,6 +45,24 @@ Only send material within the task's authorized data scope.
 
 Read [reference/use-cases.md](reference/use-cases.md) for message triage, confidence
 routing, model-output checks, agent harnesses, extraction, and ML features.
+
+## When the operator asks for something quick
+
+Quick/simple phrases specify the requested pace, not the tool.
+
+- For a bounded judgment over text (does X hold, which option, how much), write
+  **1–8 closed, literal questions** and run them in **one `jev ask` call**; use
+  a sugar command for a single question. Answer in a few lines with the values.
+  Read only items in the uncertain band yourself, except for the consequential
+  cross-check below. Do not produce a long report.
+- For editing, generating, calculating, or looking up a fact, do the task directly
+  and briefly. Do not call `jev` or invent questions to turn it into a judgment.
+  Loading this skill does not require invoking the CLI.
+
+An improvised question is **not calibrated**: treat its result as a smoke reading.
+Before trusting a new question, run the positive and negative controls below.
+If consequences matter, state this limitation in one line and cross-check the
+result against your own quick reading. A quick request does not waive verification.
 
 ## When not to use it
 
@@ -68,8 +91,7 @@ versions or assume agent-specific environment substitutions work in every agent.
 Run `jev --version` to identify the CLI; `jev models` checks authentication.
 
 ```bash
-printf '%s\n' 'Please unsubscribe me from offers.' |
-  jev noul 'Does the message explicitly request no further promotional contact?' -p
+jev noul 'Does the message explicitly request no further promotional contact?' --state 'Please unsubscribe me from offers.' -p
 
 jev choice 'Which team handles the primary request?' \
   -o 'support=Help with an existing service' \
@@ -83,6 +105,12 @@ jev score 'How much does the reported issue block use?' \
 
 jev ask --questions questions.json --state-file state.json --full
 ```
+
+Prefer inline `--state` for short inputs: the command starts with `jev`, matching
+Claude's `Bash(jev *)` permission pattern. For long or hard-to-quote text, use
+`--state-file` or stdin, for example `jev noul 'Does message request a refund?' -p < message.txt`.
+A pipeline such as `printf ... | jev ...` starts with `printf` and is not covered
+by that pattern; it may require separate permission under strict settings.
 
 `ask` reads a question map, not a complete request envelope. Default output is
 compact JSON: the `answers` map for `ask`, one answer object for sugar commands.
