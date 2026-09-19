@@ -182,8 +182,10 @@ failure?" True: explicitly reports a failure still present. False: no failure
 reported or explicitly resolved. Repeat with each exact record position.
 
 **Trap:** one giant state full of unrelated records lowers accuracy. Retrieve and
-filter first, chunk, and audit samples of rejected records to measure misses.
-The model returns IDs/values; the agent then reads the selected original records.
+filter first, then chunk. The model returns IDs/values; the agent then reads the
+original text of every flagged record **and every uncertain one** (same bands as
+the quick-review rule in `SKILL.md`), never only the flagged ones. Unflagged records
+are not cleared: audit a sample of them to measure misses.
 Never ask it to count qualifying records: sum decisions in code.
 
 ## Extract by selecting proposed spans
