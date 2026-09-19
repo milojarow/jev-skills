@@ -23,7 +23,11 @@ jev --version
 ```
 
 Without an explicit state option, read UTF-8 state from stdin. `--state-file -`
-also means stdin. A terminal without piped input requires an explicit source.
+also means stdin. Files and stdin are read as bytes and decoded with `utf-8-sig`:
+an initial UTF-8 BOM is removed, and invalid UTF-8 exits with 2. This applies to
+both state and questions, regardless of locale or `PYTHONIOENCODING`. Other text,
+including line endings, is preserved. A terminal without piped input requires
+an explicit source.
 `--questions -` consumes stdin, so it requires `--state` or a named state file;
 two inputs cannot share an undelimited stream. `--state-text` forces the original
 text through unchanged. State source options are mutually exclusive.
@@ -33,6 +37,12 @@ the original string, including numbers, booleans, `null`, quoted JSON strings,
 and malformed JSON. For example, `--state '42'` sends the string `42`, and
 `--state '"hello"'` preserves the quote characters. Use `--state 'hello'` to send
 unquoted text. This follows the API's string/object/array state contract.
+
+An object/array with duplicate keys or non-finite numbers (`NaN`, `Infinity`,
+or a number overflowing the decoder) exits with 2 instead of silently becoming
+text. The diagnostic names `--state-text` as the explicit override. Input that
+cannot be parsed as an object/array even by the permissive JSON decoder still
+falls back to text. `--state-text` skips JSON decoding, but not UTF-8 validation.
 
 Questions are a nonempty JSON **map**, not a list and not an envelope containing
 `state`, `model`, and `questions`. Preserve the IDs you need in the answer map.
@@ -58,6 +68,9 @@ The CLI validates response types before returning success. An invalid answer
 diagnostic identifies the caller's question ID and failed field, without echoing
 the remote field value. Caller IDs are sanitized and credential-redacted too.
 Successful responses redact the loaded credential if it is echoed.
+If a stdout consumer closes the pipe after a successful evaluation, the CLI
+discards remaining output and exits with 0 without stderr, including during
+interpreter shutdown. A closed reader does not turn success into an API failure.
 
 ## Credentials and transport
 
@@ -73,7 +86,11 @@ Inherit it from the existing environment or let the CLI read its existing locati
 `JEV_API_BASE` defaults to `https://api.typesafe.ai`. The CLI appends `/v1/models`
 or `/v1/systemone`; do not include those paths in the base. An override selects
 where the authenticated request goes, so use a dummy key for local fake servers.
-HTTP redirects are rejected. Standard environment proxy handling remains available.
+HTTPS is required except for literal IPv4 loopback addresses in `127.0.0.0/8`,
+IPv6 `::1`, and `localhost`. Other HTTP hosts exit with 2 before any DNS lookup
+or connection attempt. Loopback destinations bypass all environment proxies,
+for both HTTP and HTTPS. Non-loopback HTTPS can use environment proxies; the
+API authorization header remains inside TLS. HTTP redirects are rejected.
 
 Each attempt has a 30-second deadline, including connecting and reading the body.
 HTTP 429, all 5xx (including 529), and network failures retry up to **three total
@@ -82,6 +99,13 @@ date can extend either wait. Invalid/past headers do not remove the backoff.
 Each wait is limited to 30 seconds. If a retryable response requests a longer
 wait, the CLI immediately exits with 4 and reports the requested seconds and
 the limit; it does not sleep or silently retry earlier than requested.
+
+A POST that times out while reading may already have been evaluated and billed.
+Retrying a network failure can therefore cause up to three evaluations and
+charges for one CLI invocation. The evaluation has no application-side effects,
+but these retries do not provide exactly-once billing. The returned response is
+from the attempt that completed successfully; earlier attempts may have completed
+at the service even though their responses did not reach the CLI.
 
 ## Exit codes
 

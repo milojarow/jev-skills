@@ -116,6 +116,10 @@ wc -l skills/jev-skill/SKILL.md
   environment/file credential lookup, authenticated header, seconds/date retry
   waits and their upper bound, recovery/exhaustion, redirects, sanitized 422
   details, actionable response validation, and output/argv credential checks.
+  Regression cases also cover HTTP rejection outside loopback, proxy bypass,
+  UTF-8 under a different locale, BOM, closed stdout pipes, and defective JSON
+  state. To challenge a historical executable, use `tools/check-cli.sh /path/to/jev`;
+  the checker keeps its current expectations and reports regressions with exit 1.
 - `check-live.sh`: real endpoint authentication, positive noul > 0.9, negative
   noul < 0.1, and dummy credential rejection with exit 3. This is a smoke test,
   not domain calibration. A 180-second subprocess watchdog also bounds the gate.
