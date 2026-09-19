@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+"""Small TypeSafe client. Python standard library only."""
+
+import argparse
+import decimal
+import email.utils
+import http.client
+import json
+import math
+import os
+from pathlib import Path
+import signal
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+VERSION = "0.1.0"
+DEFAULT_BASE = "https://api.typesafe.ai"
+ATTEMPTS = 3
+TIMEOUT = 30
+MAX_RETRY_WAIT = 30
+
+
+def fail(code, message):
+    # Dynamic diagnostics must be sanitized before reaching this function.
+    print("jev: " + message, file=sys.stderr)
+    raise SystemExit(code)
+
+
+def safeDiagnostic(text, apiKey):
+    variants = (apiKey, json.dumps(apiKey, ensure_ascii=False)[1:-1])
+    for secret in sorted(set(variants), key=len, reverse=True):
+        if secret:
+            text = text.replace(secret, "[REDACTED]")
+    return " ".join("".join(char if char.isprintable() else " " for char in text).split())
+
+
+def validationDetail(raw, apiKey):
+    text = raw.decode("utf-8", errors="replace")
+    try:
+        detail = decodeJson(text)
+        if isinstance(detail, dict):
+            detail = detail.get("detail", detail.get("message", detail))
+        text = detail if isinstance(detail, str) else json.dumps(detail, ensure_ascii=False, separators=(",", ":"))
+    except (ValueError, RecursionError):
+        pass
+    message = "API validation failed (HTTP 422): " + (text or "no detail returned")
+    message = safeDiagnostic(message, apiKey)
+    # Include the five-character 'jev: ' prefix in the 500-character limit.
+    return message if len(message) <= 495 else message[:492] + "..."
+
+
+def invalidArguments(message):
+    fail(2, "invalid arguments; use --help")
+
+
+def makeParser():
+    parser = argparse.ArgumentParser(prog="jev", allow_abbrev=False)
+    parser.error = invalidArguments
+    parser.add_argument("--version", action="version", version="jev " + VERSION)
+    commands = parser.add_subparsers(dest="command", required=True)
+    for name in ("ask", "noul", "choice", "score", "models"):
+        command = commands.add_parser(name, allow_abbrev=False)
+        command.error = invalidArguments
+        if name == "models":
+            continue
+        state = command.add_mutually_exclusive_group()
+        state.add_argument("--state", help="inline state; defaults to stdin")
+        state.add_argument("--state-file", dest="stateFile", metavar="FILE", help="UTF-8 state file; - reads stdin")
+        command.add_argument("--state-text", dest="stateText", action="store_true", help="force state to remain text")
+        command.add_argument("--model", default="jev-latest")
+        output = command.add_mutually_exclusive_group()
+        output.add_argument("--full", action="store_true", help="return the complete API response")
+        if name == "ask":
+            command.add_argument("--questions", required=True, metavar="FILE|-", help="JSON question map")
+        else:
+            command.add_argument("instructions")
+            output.add_argument("-p", "--plain", action="store_true", help="print only the scalar")
+        if name == "noul":
+            command.add_argument("--true", dest="trueText")
+            command.add_argument("--false", dest="falseText")
+        elif name == "choice":
+            command.add_argument("-o", "--option", action="append", required=True, metavar="KEY=TEXT")
+        elif name == "score":
+            command.add_argument("-l", "--level", action="append", required=True, metavar="TEXT")
+    return parser
+
+
+def rejectConstant(value):
+    raise ValueError("non-finite JSON")
+
+
+def uniqueObject(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def decodeJson(text):
+    return json.loads(text, parse_constant=rejectConstant, object_pairs_hook=uniqueObject)
+
+
+def readText(path):
+    try:
+        if path == "-":
+            if sys.stdin.isatty():
+                fail(2, "provide state or questions through a file, option, or pipe")
+            return sys.stdin.read()
+        return Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeError, ValueError):
+        fail(2, "cannot read UTF-8 input")
+
+
+def readState(args):
+    source = args.stateFile if args.stateFile is not None else "-"
+    text = args.state if args.state is not None else readText(source)
+    if args.stateText:
+        return text
+    try:
+        value = decodeJson(text)
+    except (ValueError, RecursionError):
+        return text
+    return value if isinstance(value, (dict, list)) else text
+
+
+def readQuestions(args):
+    if args.command == "ask":
+        try:
+            questions = decodeJson(readText(args.questions))
+        except (ValueError, RecursionError):
+            fail(2, "questions must be a JSON map without duplicate keys")
+    else:
+        question = {"type": args.command, "instructions": args.instructions}
+        if not args.instructions.strip():
+            fail(2, "instructions must not be empty")
+        if args.command == "noul":
+            criteria = {key: value for key, value in (("true", args.trueText), ("false", args.falseText)) if value is not None}
+            if criteria:
+                question["criteria"] = criteria
+        elif args.command == "choice":
+            criteria = {}
+            for option in args.option:
+                key, separator, description = option.partition("=")
+                if not separator or not key.strip() or key in criteria:
+                    fail(2, "choice options require unique nonempty keys in KEY=TEXT form")
+                criteria[key] = description
+            question["criteria"] = criteria
+        elif args.command == "score":
+            question["criteria"] = args.level
+        questions = {"answer": question}
+    validateQuestions(questions)
+    return questions
+
+
+def isEntry(value):
+    return value is None or isinstance(value, (str, dict, list))
+
+
+def validateQuestions(questions):
+    valid = isinstance(questions, dict) and bool(questions)
+    if not valid:
+        fail(2, "questions must be a nonempty JSON map")
+    for key, question in questions.items():
+        if not key.strip() or not isinstance(question, dict):
+            fail(2, "each question needs an ID and a question object")
+        kind = question.get("type")
+        if kind not in ("noul", "choice", "score") or "instructions" not in question or not isEntry(question["instructions"]):
+            fail(2, "each question needs a supported type and instructions")
+        criteria = question.get("criteria")
+        if kind == "noul" and "criteria" in question:
+            valid = isinstance(criteria, dict) and set(criteria) <= {"true", "false"} and all(isEntry(v) for v in criteria.values())
+        elif kind == "choice":
+            valid = isinstance(criteria, dict) and bool(criteria) and all(k.strip() and isEntry(v) for k, v in criteria.items())
+        elif kind == "score":
+            valid = isinstance(criteria, list) and 2 <= len(criteria) <= 10 and all(isEntry(v) for v in criteria)
+        else:
+            valid = True
+        if not valid:
+            fail(2, "invalid criteria for the question type; score requires 2 to 10 levels")
+
+
+def loadKey():
+    apiKey = os.environ.get("TYPESAFE_API_KEY", "").strip()
+    if not apiKey:
+        try:
+            lines = (Path.home() / ".secrets/environment.d/11-secrets.conf").read_text(encoding="utf-8").splitlines()
+            for line in lines:
+                name, separator, value = line.strip().partition("=")
+                if separator and name == "TYPESAFE_API_KEY":
+                    apiKey = value.strip()
+                    if len(apiKey) >= 2 and apiKey[0] == apiKey[-1] and apiKey[0] in "\"'":
+                        apiKey = apiKey[1:-1]
+        except (OSError, UnicodeError):
+            pass
+    if not apiKey or any(ord(char) < 33 or ord(char) > 126 for char in apiKey):
+        fail(3, "missing or invalid TYPESAFE_API_KEY")
+    return apiKey
+
+
+def apiBase():
+    base = os.environ.get("JEV_API_BASE", DEFAULT_BASE).rstrip("/")
+    try:
+        parts = urllib.parse.urlsplit(base)
+        valid = parts.scheme in ("http", "https") and parts.hostname and not parts.username and not parts.password
+        valid = valid and not parts.query and not parts.fragment and parts.port != 0
+        valid = valid and not any(char.isspace() or ord(char) < 32 for char in base)
+    except ValueError:
+        valid = False
+    if not valid:
+        fail(2, "JEV_API_BASE must be an HTTP(S) base URL without credentials, query, or fragment")
+    return base
+
+
+def retryDelay(header, attempt):
+    backoff = float(2 ** attempt)
+    if header:
+        try:
+            seconds = decimal.Decimal(header)
+        except decimal.InvalidOperation:
+            try:
+                seconds = decimal.Decimal(str(email.utils.parsedate_to_datetime(header).timestamp() - time.time()))
+            except (TypeError, ValueError, OverflowError):
+                seconds = decimal.Decimal(0)
+        if seconds.is_finite():
+            if seconds > MAX_RETRY_WAIT:
+                fail(4, "Retry-After requested " + str(seconds) + " seconds; maximum wait is 30 seconds")
+            backoff = max(backoff, float(seconds))
+    return backoff
+
+
+def attemptTimeout(signum, frame):
+    raise TimeoutError("attempt deadline reached")
+
+
+def requestApi(base, apiKey, payload=None):
+    data = None
+    if payload is not None:
+        try:
+            data = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        except (ValueError, UnicodeError, RecursionError):
+            fail(2, "input cannot be encoded as finite UTF-8 JSON")
+    request = urllib.request.Request(base + ("/v1/models" if data is None else "/v1/systemone"), data=data)
+    request.add_header("Authorization", "Bearer " + apiKey)
+    request.add_header("Accept", "application/json")
+    if data is not None:
+        request.add_header("Content-Type", "application/json")
+    redirectHandler = urllib.request.HTTPRedirectHandler()
+    # Credentials must never follow a redirect to another endpoint.
+    redirectHandler.redirect_request = lambda *args, **kwargs: None
+    opener = urllib.request.build_opener(redirectHandler)
+    for attempt in range(ATTEMPTS):
+        retryAfter = None
+        previousHandler = signal.signal(signal.SIGALRM, attemptTimeout)
+        signal.setitimer(signal.ITIMER_REAL, TIMEOUT)
+        try:
+            with opener.open(request, timeout=TIMEOUT) as response:
+                raw = response.read()
+            try:
+                result = decodeJson(raw.decode("utf-8"))
+            except (ValueError, UnicodeError, RecursionError):
+                fail(4, "API returned invalid JSON")
+            if not isinstance(result, dict):
+                fail(4, "API returned an invalid response object")
+            return result
+        except urllib.error.HTTPError as error:
+            status = error.code
+            retryAfter = error.headers.get("Retry-After")
+            if status == 422:
+                try:
+                    message = validationDetail(error.read(64 * 1024), apiKey)
+                except (OSError, http.client.HTTPException):
+                    message = "API validation failed (HTTP 422); detail could not be read"
+                finally:
+                    error.close()
+                fail(5, message)
+            error.close()
+            if status in (401, 403):
+                fail(3, "authentication rejected; check TYPESAFE_API_KEY")
+            if status != 429 and not 500 <= status <= 599:
+                fail(4, "API request failed (HTTP " + str(status) + ")")
+        except (urllib.error.URLError, OSError, http.client.HTTPException):
+            pass
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previousHandler)
+        delay = retryDelay(retryAfter, attempt)
+        if attempt + 1 < ATTEMPTS:
+            time.sleep(delay)
+    fail(4, "API, network, or rate limit failure after 3 attempts")
+
+
+def isNumber(value, low, high):
+    return type(value) in (int, float) and low <= value <= high and math.isfinite(value)
+
+
+def invalidAnswer(questionId, field, apiKey):
+    callerId = repr(safeDiagnostic(questionId, apiKey))
+    fail(4, "API returned invalid field '" + field + "' for question " + callerId)
+
+
+def validateResponse(result, questions, apiKey):
+    answers = result.get("answers")
+    if not isinstance(answers, dict):
+        fail(4, "API returned invalid field 'answers'; expected an object")
+    for key in questions:
+        if key not in answers:
+            invalidAnswer(key, "answers (missing entry)", apiKey)
+    if set(answers) != set(questions):
+        fail(4, "API returned unexpected entries in field 'answers'")
+    for field, expectedType in (("model", str), ("usage", dict)):
+        if not isinstance(result.get(field), expectedType):
+            fail(4, "API returned invalid field '" + field + "'")
+    for key, question in questions.items():
+        answer = answers[key]
+        kind = question["type"]
+        if not isinstance(answer, dict):
+            invalidAnswer(key, "answers (entry must be an object)", apiKey)
+        if answer.get("type") != kind:
+            invalidAnswer(key, "type", apiKey)
+        if kind == "noul":
+            if not isNumber(answer.get("noul"), 0, 1):
+                invalidAnswer(key, "noul", apiKey)
+        else:
+            criteria = question["criteria"]
+            keys = set(criteria) if kind == "choice" else {str(i) for i in range(len(criteria))}
+            probabilities = answer.get("probabilities")
+            if not isinstance(probabilities, dict) or set(probabilities) != keys or not all(isNumber(v, 0, 1) for v in probabilities.values()):
+                invalidAnswer(key, "probabilities", apiKey)
+            if not isNumber(answer.get("confidence"), 0, 1):
+                invalidAnswer(key, "confidence", apiKey)
+            if kind == "choice":
+                if not isinstance(answer.get("choice"), str) or answer["choice"] not in keys:
+                    invalidAnswer(key, "choice", apiKey)
+            else:
+                if not isNumber(answer.get("score"), 0, len(criteria) - 1):
+                    invalidAnswer(key, "score", apiKey)
+                if not isinstance(answer.get("legend"), dict):
+                    invalidAnswer(key, "legend", apiKey)
+    return answers
+
+
+def emit(value, apiKey, plain=False):
+    try:
+        output = str(value) if plain else json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        keyText = apiKey if plain else json.dumps(apiKey, ensure_ascii=False)[1:-1]
+        print(output.replace(keyText, "[REDACTED]"))
+    except (ValueError, UnicodeError):
+        fail(4, "cannot encode API output")
+
+
+def main():
+    args = makeParser().parse_args()
+    base = apiBase()
+    if args.command == "models":
+        apiKey = loadKey()
+        result = requestApi(base, apiKey)
+        if not isinstance(result.get("models"), list):
+            fail(4, "API response is missing the models list")
+        emit(result, apiKey)
+        return
+    if args.command == "ask" and args.questions == "-" and args.state is None and args.stateFile in (None, "-"):
+        fail(2, "questions and state cannot both read stdin")
+    questions = readQuestions(args)
+    state = readState(args)
+    if not args.model.strip():
+        fail(2, "model must not be empty")
+    apiKey = loadKey()
+    result = requestApi(base, apiKey, {"state": state, "model": args.model, "questions": questions})
+    answers = validateResponse(result, questions, apiKey)
+    value = result if args.full else answers if args.command == "ask" else answers["answer"]
+    plain = getattr(args, "plain", False)
+    if plain:
+        value = value[args.command]
+    emit(value, apiKey, plain)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        fail(4, "interrupted")
+    except BrokenPipeError:
+        sys.exit(4)
+    except Exception:
+        fail(4, "request failed; no diagnostic data emitted")
