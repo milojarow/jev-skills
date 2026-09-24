@@ -3,16 +3,14 @@ name: jev-skill
 description: >-
   Use whenever Jev, TypeSafe, or a System One model is mentioned in English or
   Spanish: "jev", "usa jev", "pásaselo a jev", "pregúntale a jev", "con jev".
-  Also for quick/simple requests: "es algo rápido", "flash review", "rapid review",
-  "es en corto esa revisión", "en corto", "en cortinas", "es una revisión bien simple",
-  "te pedí algo simple", "revisión rápida", "échale un ojo", "un vistazo rápido",
-  "checada rápida", "por encimita", "de volada", "sin tanto rollo",
-  "nomás dime si sí o no", "quick check", "quick look", "quick pass", "sanity check",
-  "gut check", "spot check". Also for bounded semantic decisions in software or
+  Also for any request framed as quick, simple or short (a quick look, a yes/no),
+  in Spanish, colloquial included ("es algo rápido", "es una revisión bien simple",
+  "échale un ojo", "de volada", "en cortinas"), or in English ("quick check",
+  "flash review", "rapid review", "sanity check"). Also for bounded
+  semantic decisions in software or
   shell work: batch classification, ranking, evidence screening, candidate
   selection, confidence routing: "clasifica estos mensajes", "juicios en lote",
-  "rutea por confianza", "verifica estas citas". Quick wording alone sets pace:
-  Jev calls fit bounded text judgments; other quick tasks need direct, brief work.
+  "rutea por confianza", "verifica estas citas".
 allowed-tools: Bash(jev *) Bash(${CLAUDE_SKILL_DIR}/bin/jev *)
 ---
 
