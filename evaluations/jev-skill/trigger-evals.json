@@ -243,5 +243,20 @@
     "query": "de volada: escribe un saludo breve para un correo.",
     "should_trigger": true,
     "expect_cli_call": false
+  },
+  {
+    "query": "Usa Jev para encontrar archivos de configuración por su propósito. Reúne rutas y notas sin secretos y distingue credenciales compartidas del operador de credenciales exclusivas de aplicaciones.",
+    "should_trigger": true,
+    "expect_cli_call": true
+  },
+  {
+    "query": "Find configuration files by meaning: identify which supplied file descriptions concern operator tasks outside application projects. a: shared operator credential explicitly for tasks outside projects. b: demo application credential only.",
+    "should_trigger": true,
+    "expect_cli_call": true
+  },
+  {
+    "query": "Usa Jev: localiza el archivo con el nombre literal settings.json usando rg --files; no hace falta interpretar su contenido.",
+    "should_trigger": true,
+    "expect_cli_call": false
   }
 ]

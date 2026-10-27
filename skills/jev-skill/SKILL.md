@@ -8,7 +8,7 @@ description: >-
   "échale un ojo", "de volada", "en cortinas"), or in English ("quick check",
   "flash review", "rapid review", "sanity check"). Also for bounded
   semantic decisions in software or
-  shell work: batch classification, ranking, evidence screening, candidate
+  shell work: semantic file search, batch classification, ranking, evidence screening, candidate
   selection, confidence routing: "clasifica estos mensajes", "juicios en lote",
   "rutea por confianza", "verifica estas citas".
 allowed-tools: Bash(jev *) Bash(${CLAUDE_SKILL_DIR}/bin/jev *)
@@ -43,10 +43,12 @@ Only send material within the task's authorized data scope.
 
 Read [reference/use-cases.md](reference/use-cases.md) for message triage, confidence
 routing, model-output checks, indexed action loops, agent harnesses, extraction, and ML features.
+For finding files or passages by meaning, read [reference/semantic-search.md](reference/semantic-search.md).
+Use filesystem tools to collect candidates and Jev to judge relevance; this is a supported search workflow.
 
 ## When the operator asks for something quick
 
-Quick/simple wording sets the pace. For editing, generation, calculation, lookup,
+Quick/simple wording sets the pace. For editing, generation, calculation, exact lookup,
 code explanation, or debugging, do the task directly and briefly: no Jev call,
 no invented questions, no ⚖️, no skill mention or tool-selection explanation.
 

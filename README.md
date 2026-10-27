@@ -21,6 +21,8 @@ that belongs in code. The examples are generic and contain no account inventory.
 
 See [decision use cases](skills/jev-skill/reference/use-cases.md) and the
 [CLI contract](skills/jev-skill/reference/cli.md).
+For locating files or passages by meaning, see the optional
+[semantic search workflow](skills/jev-skill/reference/semantic-search.md).
 
 ## Requirements
 

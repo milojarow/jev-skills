@@ -207,6 +207,9 @@ the agent's judgment, tool permissions, or the user's chosen method.
 
 ## Rerank memory or search results
 
+For finding files or passages by meaning, including credential-scope metadata,
+read [semantic-search.md](semantic-search.md) for collection, judgment, and verification.
+
 **Decision shape:** score relevance of already retrieved candidate passages.
 
 **Primitives:** comparable per-candidate Scores; optional Nouls for explicit
