@@ -23,6 +23,17 @@ See [decision use cases](skills/jev-skill/reference/use-cases.md) and the
 [CLI contract](skills/jev-skill/reference/cli.md).
 For locating files or passages by meaning, see the optional
 [semantic search workflow](skills/jev-skill/reference/semantic-search.md).
+For experimental image inputs and localization, see
+[images and Box](skills/jev-skill/reference/images-and-box.md).
+The [model/request reference](skills/jev-skill/reference/models-and-requests.md)
+separates service capabilities from the bundled text CLI.
+
+Version 0.2.0 evolves the guidance against the 2026-11-17 documentation snapshot:
+image and Box prototypes, model capabilities and long-context headers, companion
+Noul and probability routing, cost-aware screening and hierarchical classification.
+The CLI's text commands, transport and credential behavior are preserved; its
+version is updated with the package. The quick-review example now loads from an
+optional reference. No RAG, SDK dependency or librarian is installed by this update.
 
 ## Requirements
 

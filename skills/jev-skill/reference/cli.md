@@ -4,6 +4,11 @@ Requires Python 3 with its standard library on a POSIX system. The attempt deadl
 uses POSIX signals. The executable has no child processes and requires no pip
 packages, jq, or curl.
 
+This executable exposes text/structured-text Choice, Noul and Score. Image assets,
+Box, multipart requests and the long-context opt-in header use the SDK/HTTP path,
+not invented flags or a full request envelope passed to `jev ask`. See
+[images and Box](images-and-box.md) and [model/request capabilities](models-and-requests.md).
+
 ## Commands
 
 ```text

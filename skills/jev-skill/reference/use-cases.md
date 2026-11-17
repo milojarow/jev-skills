@@ -59,6 +59,28 @@ thresholds for the actual consequences; inspect Choice/Score confidence separate
 from the value. For Noul, maintain yes/no cutoffs and an uncertainty interval.
 Routing to another model is a fallback path, not proof that its answer is correct.
 
+## Companion Noul and probability routing
+
+A Choice returns a relative winner even when every option is a poor fit. When
+that matters, ask a companion Noul in the same batch: "Does `message` concern any
+product in `products`?" Use the Choice only when applicability is established;
+send an unclear applicability result to review. An `other` option can help but
+does not measure applicability independently.
+
+For a chosen option, `probabilities[choice]` is different from the answer's
+distribution confidence. Define which signal gates each route and measure its
+threshold against the consequences. Neither signal grants permission for an
+effect. Keep absent, uncertain and confident-applicable outcomes distinct.
+
+## Screen before fetching a larger state
+
+A preliminary Noul can avoid loading a customer history or calling a slower
+model when the initial message clearly needs neither. Give uncertain results a
+separate outcome. Use a first request only when it avoids work or context that
+the later step needs; when all independent questions use the same state, retain
+one batched request and let code ignore irrelevant answers. This distinction
+preserves speculative fan-out without paying for a full context on every item.
+
 ## Check another model's output: citation and claim
 
 **Decision shape:** determine whether a specific source passage supports one claim.
@@ -120,7 +142,8 @@ in `ad.serviceClaim`?" Ask separately about eligibility or a stated condition.
 
 **Trap:** partial or stale landing text hides contradictions. Fetch the relevant
 page first; normalize and compare exact prices, quantities, and dates in code.
-Jev cannot inspect a URL, screenshot, or image by itself.
+Jev does not fetch a URL or local file by itself. Supply the relevant text, or
+use the experimental [image-input path](images-and-box.md) for authorized images.
 
 ## Run an agent loop over indexed actions
 
@@ -289,12 +312,23 @@ Use held-out outcomes, compare with a baseline, and version the questions and
 feature pipeline. Training a downstream classifier/regressor does not fine-tune
 Jev. Keep deterministic identities and final evaluation outside the decision model.
 
+## Classify through a hierarchy
+
+Use Choice questions over the children of a supplied category node. For a deep
+taxonomy, a greedy first choice can discard the right branch. A beam can retain
+several plausible paths, batch their independent frontier questions per level
+and prune in code. The official cookbook compares paths by the geometric mean
+of edge probabilities so depth alone does not penalize a leaf; use log-space
+calculation for deep paths. That ranking is a heuristic, not a calibrated
+probability that the final leaf is correct. Check candidate coverage, ambiguous
+siblings and the option to retain a broader category when a leaf is uncertain.
+
 ## Sources and further designs
 
-These patterns are grounded in TypeSafe's documentation snapshot dated 2026-09-19;
+These patterns were checked and extended against TypeSafe's 2026-11-17 snapshot;
 they are candidate applications, not validation claims for a particular domain.
 Use the [live index](https://docs.typesafe.ai/llms.txt) to find current cookbooks:
 citation checks, classifying RAG passages, skill suggestion, reranking, pre-parsed
 value extraction, and feature discovery. Also consult
-[jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md) before extending
+[jaggedness](https://docs.typesafe.ai/model-jaggedness.md) before extending
 a question to a new task or language.

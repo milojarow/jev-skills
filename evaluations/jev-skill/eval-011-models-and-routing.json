@@ -1,0 +1,12 @@
+{
+  "id": "jev-models-and-routing",
+  "skills": ["jev-skill"],
+  "query": "La documentación menciona contexto largo y un Choice elige una categoría con confianza alta aunque ninguna encaja. Diseña el manejo en mi cliente existente sin instalar RAG ni cambiar credenciales. Si todas las preguntas usan el mismo estado, ¿hago un Noul primero y luego el resto?",
+  "expected_behavior": [
+    "Separar el opt-in de contexto largo en SDK/API de los flags disponibles en el CLI y conservar los límites de cuerpo y de contexto",
+    "Distinguir probabilidad de la opción, confianza de distribución y aplicabilidad mediante Companion Noul",
+    "Mantener preguntas independientes sobre el mismo estado en una petición; reservar un screen previo para cuando evite contexto o trabajo adicional",
+    "Usar el snapshot y los contratos pertinentes, preservar el cliente elegido y dejar el RAG y las credenciales fuera del cambio"
+  ],
+  "priority": "high"
+}

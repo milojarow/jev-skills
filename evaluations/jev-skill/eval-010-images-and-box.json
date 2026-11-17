@@ -1,0 +1,12 @@
+{
+  "id": "jev-images-and-box",
+  "skills": ["jev-skill"],
+  "query": "Diseña un prototipo con Jev que encuentre una taza en una foto que también puede no contener ninguna. ¿Puedo pasar el PNG con jev ask --state-file y tratar la caja como prueba de presencia? No hagas llamadas reales.",
+  "expected_behavior": [
+    "Distinguir el CLI de texto de las capacidades experimentales de imágenes y Box en SDK/API",
+    "Explicar el opt-in por petición, el modelo compatible con Box y el envío real de assets en lugar de una ruta o URL como texto",
+    "Pedir presencia mediante Noul junto a Box en la misma petición y descartar o revisar la caja cuando no se establezca presencia",
+    "No copiar un umbral universal de confianza a Box ni afirmar validación de producción, y respetar la petición de no llamar al servicio"
+  ],
+  "priority": "high"
+}

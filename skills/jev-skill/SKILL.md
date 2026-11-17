@@ -25,14 +25,16 @@ regardless of capitalization. Loading the skill does not imply calling the API.
 For operations outside its fit, do the task directly and briefly with the
 appropriate tool.
 
-Jev takes text or structured text as `state` plus typed `questions` and returns
-values and probabilities. It does not generate explanations. Code owns actions.
+Jev evaluates supplied `state` with typed `questions` and returns values and
+probabilities. It does not generate explanations. Code owns actions. The bundled
+CLI handles text; images and Box use the experimental SDK/API path described below.
 
 | Decision shape | Primitive | Returned fields |
 | --- | --- | --- |
 | Which one of these options? | `choice` | `choice`, `probabilities`, `confidence` |
 | Does this condition hold? | `noul` | `noul`: probability of yes, from 0 to 1 |
 | Where on one descriptive scale? | `score` | `score`, `legend`, `probabilities`, `confidence` |
+| Where in an image? (experimental SDK/API) | `box` | `box` edges, `confidence` |
 
 For an agent **building software**, propose Jev when a planned LLM prompt followed
 by JSON parsing serves a bounded semantic decision. Keep the chosen application
@@ -45,6 +47,8 @@ Read [reference/use-cases.md](reference/use-cases.md) for message triage, confid
 routing, model-output checks, indexed action loops, agent harnesses, extraction, and ML features.
 For finding files or passages by meaning, read [reference/semantic-search.md](reference/semantic-search.md).
 Use filesystem tools to collect candidates and Jev to judge relevance; this is a supported search workflow.
+For images or locating a target, read [reference/images-and-box.md](reference/images-and-box.md).
+For model capabilities, request limits or long context, read [reference/models-and-requests.md](reference/models-and-requests.md).
 
 ## When the operator asks for something quick
 
@@ -98,10 +102,11 @@ is a smoke test: quick means fewer words and one call, not fewer declared guaran
 - A large state full of irrelevant detail: retrieve, trim, and chunk first.
 - A sole security boundary over adversarial content: injected instructions can
   steer Jev. Screening is a fallible signal; keep independent enforcement.
-- Images, audio, video, or binary input: Jev accepts text only; preprocess first.
-- Unmeasured non-English workloads: English is its primary training language.
-  Measure the actual language, register, slang, and edge cases before relying on it.
-  A couple of easy Spanish examples establish only a smoke test.
+- Raw audio or video: supply a transcript or selected still frames through the
+  appropriate input path. The text CLI does not accept image files or Box questions.
+- Unmeasured language/domain workloads: multilingual support varies by model.
+  Measure actual language, register, slang and edge cases; easy Spanish controls
+  establish only a smoke test, even on a model with improved multilingual support.
 
 Keep instructions and criteria consistent. Separate questions are not guaranteed
 to obey logical identities, and a score is not an exact numerical measurement.
@@ -116,34 +121,9 @@ authentication. Neither is a prerequisite for a screening call.
 
 ### Canonical quick review: items and controls in one call
 
-Example `review-state.json`: two items and two agent-written controls. Keep the
-expected labels outside both JSON files: `c1` is positive; `c2` is negative.
-
-```json
-{
-  "items": {"a": "The service failed again and I am unhappy.", "b": "Everything works. Thanks."},
-  "controls": {"c1": "I am dissatisfied with the service.", "c2": "I am happy with the service."}
-}
-```
-
-`review-questions.json` repeats one template with exact field references:
-
-```json
-{
-  "a": {"type": "noul", "instructions": "Does items.a explicitly express dissatisfaction with the service?"},
-  "b": {"type": "noul", "instructions": "Does items.b explicitly express dissatisfaction with the service?"},
-  "c1": {"type": "noul", "instructions": "Does controls.c1 explicitly express dissatisfaction with the service?"},
-  "c2": {"type": "noul", "instructions": "Does controls.c2 explicitly express dissatisfaction with the service?"}
-}
-```
-
-```bash
-jev ask --questions review-questions.json --state-file review-state.json
-```
-
-The output is an answers map. First require `c1.noul > 0.8` and `c2.noul < 0.2`;
-otherwise read directly and report failed controls. Then apply the bands and source
-reading rule above to `a` and `b`; report their IDs/values, excluding the control IDs.
+Read [reference/quick-review.md](reference/quick-review.md) for the complete
+state/question files, controls and interpretation. Include all requested items
+and both controls in the same batch, with expected control labels kept outside it.
 
 For **one question whose template has already passed controls**, sugar is sufficient:
 
@@ -201,9 +181,10 @@ evidence or available options requires a new call.
 For multiple records, give each a stable field/position and write one question per
 record and dimension, naming that exact field in the instruction. Build question
 maps in code. Chunk large corpora after retrieval; shared state is not free context.
-The documented 1.13 limits are 64k tokens for state plus all questions, and 32k for
-state plus the longest question. Check live limits before sizing production batches;
-character counts are not exact token counts.
+Fit both state-plus-all-questions and state-plus-each-question limits. Use the
+[model/request reference](reference/models-and-requests.md) when sizing a batch;
+long context is a separate per-request opt-in, not a CLI flag or automatic fallback.
+Character counts are not exact token counts.
 
 For software loops, reuse **one persistent HTTP client** (keep-alive/HTTP/2):
 operation and speculative target heads share **one request per decision cycle**.
@@ -219,6 +200,9 @@ shell judgments in **one `jev ask`**; do not put it in a low-latency loop.
 The value says **what**; uncertainty helps decide **whether to act**. Choice and
 score confidence summarize distribution concentration, not correctness or permission.
 Noul has no separate confidence: define tested yes/no cutoffs with an abstention band.
+For Choice, `probabilities[choice]` and distribution confidence are different
+signals. A companion Noul can check whether any option applies before code uses
+the winner; see [decision patterns](reference/use-cases.md#companion-noul-and-probability-routing).
 
 For an authorized action within measured bounds, act. Route uncertain cases to a
 human or reasoning model, or fetch missing evidence first. Keep the original state,
@@ -237,11 +221,8 @@ Re-evaluate before upgrading; keep CLI version and model version distinct.
 
 ## Find current contracts and patterns
 
-Start at the [live documentation index](https://docs.typesafe.ai/llms.txt). Before
-integrating or updating, read the relevant [API](https://docs.typesafe.ai/api.md),
-[models and limits](https://docs.typesafe.ai/models.md),
-[jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md), and cookbook.
-For question structure use [primitives](https://docs.typesafe.ai/primitives.md) and
-[advanced structure](https://docs.typesafe.ai/primitives/advanced.md); for routing,
-read [confidence](https://docs.typesafe.ai/confidence.md). If live access fails,
-identify the available snapshot and leave version-sensitive claims unverified.
+Use the [documentation map](reference/documentation.md) to find the relevant API,
+primitive, model limitations or cookbook in the available local corpus, configured
+RAG or official documentation. Read only the needed sections and identify the
+snapshot/version. A RAG is optional; do not install or change a librarian to use
+this skill. Confirm current capabilities before production integration.
